@@ -40,6 +40,20 @@ canvas {
   color: #ffffff;
 }
 
+.text-gray {
+  color: #b3b3b3 !important;
+}
+
+.text-green {
+  color: #1db954 !important;
+}
+
+.mdi {
+  font-size: 1.1em;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+
 /* =========================
    FILTER BAR
 ========================= */
@@ -447,6 +461,75 @@ strong {
   color: #1db954;
   border-bottom: 3px solid #1db954;
   font-weight: 600;
+}
+
+/* =========================
+   SCROBBLES RECENTES
+========================= */
+
+.scrobble-item {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+}
+
+.scrobble-cover {
+  width: 56px;
+  height: 56px;
+  background: #ddd;
+  flex-shrink: 0;
+}
+
+.scrobble-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scrobble-info {
+  flex: 1;
+}
+
+.scrobble-track {
+  font-weight: 600;
+}
+
+.scrobble-artist {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.scrobble-time {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+#load-more-scrobbles {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  padding: 14px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+#load-more-scrobbles:active {
+  transform: scale(0.98);
+}
+
+#load-more-scrobbles:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#load-more-scrobbles:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(29, 185, 84, 0.06),
+    rgba(29, 185, 84, 0.12)
+  );
 }
 
 /* =========================

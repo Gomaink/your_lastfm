@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const axios = require("axios");
 const db = require("./db");
 const path = require("path");
 const { buildRangeFilter, fillMissingDates } = require("./utils/dateRange");
@@ -171,6 +172,58 @@ app.get("/api/top-albums", async (req, res) => {
   }
 
   res.json(albums);
+});
+
+app.get("/api/recent-scrobbles", async (req, res) => {
+  try {
+    const page = Number(req.query.page || 1);
+    const limit = 20;
+
+    const response = await axios.get("https://ws.audioscrobbler.com/2.0/", {
+      params: {
+        method: "user.getrecenttracks",
+        user: process.env.LASTFM_USERNAME,
+        api_key: process.env.LASTFM_API_KEY,
+        format: "json",
+        limit,
+        page
+      }
+    });
+
+    const tracks = response.data?.recenttracks?.track || [];
+    const attr = response.data?.recenttracks?.["@attr"];
+
+    const parsed = tracks
+    .filter(t => {
+      if (page > 1 && t["@attr"]?.nowplaying) {
+        return false;
+      }
+      return true;
+    })
+    .map(t => ({
+      track: t.name,
+      artist: t.artist["#text"],
+      image:
+        t.image?.find(i => i.size === "extralarge")?.["#text"] ||
+        t.image?.find(i => i.size === "large")?.["#text"] ||
+        null,
+      nowPlaying: Boolean(t["@attr"]?.nowplaying),
+      date: t.date ? Number(t.date.uts) * 1000 : null
+    }));
+
+
+    const totalPages = Number(attr?.totalPages || 1);
+
+    res.json({
+      tracks: parsed,
+      hasMore: page < totalPages
+    });
+
+  } catch (err) {
+    console.error("[recent-scrobbles ERROR]");
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to fetch recent scrobbles" });
+  }
 });
 
 
