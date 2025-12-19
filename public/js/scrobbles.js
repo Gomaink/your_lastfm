@@ -9,7 +9,7 @@ export async function loadScrobbles(reset = true) {
 
   if (reset) {
     currentPage = 1;
-    btn.classList.add("d-none"); // 🔒 some enquanto carrega
+    btn.classList.add("d-none");
   }
 
   const res = await fetch(`/api/recent-scrobbles?page=${currentPage}`);

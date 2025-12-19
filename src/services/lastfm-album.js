@@ -5,8 +5,6 @@ require("dotenv").config();
 const LASTFM_URL = "https://ws.audioscrobbler.com/2.0/";
 
 async function getAlbumImage(artist, album) {
-  console.log("LASTFM_API_KEY =", process.env.LASTFM_API_KEY);
-
   try {
     const { data } = await axios.get(LASTFM_URL, {
       params: {

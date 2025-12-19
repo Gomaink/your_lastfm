@@ -1,14 +1,20 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-const db = require("./db");
 const path = require("path");
+const db = require("./db");
+
 const { buildRangeFilter, fillMissingDates } = require("./utils/dateRange");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+const AVG_TRACK_SECONDS = 180;
+
 app.use(cors());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
 function buildDateFilter(year, month) {
@@ -29,6 +35,11 @@ function buildDateFilter(year, month) {
   return { where, params };
 }
 
+const getActiveFilter = (query) => {
+  const { year, month, range } = query;
+  return range ? buildRangeFilter(range) : buildDateFilter(year, month);
+};
+
 app.get("/api/top-artists", async (req, res) => {
   const rows = db.prepare(`
     SELECT artist, COUNT(*) plays
@@ -45,21 +56,12 @@ app.get("/api/top-artists", async (req, res) => {
   res.json(rows);
 });
 
-
 app.get("/api/top-tracks", async (req, res) => {
-  const { year, month, range } = req.query;
-  const AVG_TRACK_SECONDS = 180;
-
-  const filter = range
-    ? buildRangeFilter(range)
-    : buildDateFilter(year, month);
+  const filter = getActiveFilter(req.query);
 
   const rows = db.prepare(`
     SELECT
-      track,
-      artist,
-      album,
-      album_image,
+      track, artist, album, album_image,
       COUNT(*) plays,
       COUNT(*) * ? total_seconds
     FROM scrobbles
@@ -80,14 +82,7 @@ app.get("/api/top-tracks", async (req, res) => {
 });
 
 app.get("/api/plays-per-day", (req, res) => {
-  const { year, month, range } = req.query;
-
-  let filter;
-  if (range) {
-    filter = buildRangeFilter(range);
-  } else {
-    filter = buildDateFilter(year, month);
-  }
+  const filter = getActiveFilter(req.query);
 
   const rows = db.prepare(`
     SELECT
@@ -97,28 +92,14 @@ app.get("/api/plays-per-day", (req, res) => {
     ${filter.where ? `WHERE ${filter.where}` : ""}
     GROUP BY day
     ORDER BY day
-  `).all(...(filter?.params || []));
+  `).all(...(filter.params || []));
 
-  if (range) {
-    const filledRows = fillMissingDates(rows, range);
-    return res.json(filledRows);
-  }
-
-  res.json(rows);
+  const result = req.query.range ? fillMissingDates(rows, req.query.range) : rows;
+  res.json(result);
 });
 
-
 app.get("/api/summary", (req, res) => {
-  const { year, month, range } = req.query;
-
-  let filter;
-  if (range) {
-    filter = buildRangeFilter(range);
-  } else {
-    filter = buildDateFilter(year, month);
-  }
-
-  const AVG_TRACK_SECONDS = 180;
+  const filter = getActiveFilter(req.query);
 
   const row = db.prepare(`
     SELECT
@@ -126,35 +107,22 @@ app.get("/api/summary", (req, res) => {
       COUNT(DISTINCT date(played_at, 'unixepoch')) days
     FROM scrobbles
     ${filter.where ? `WHERE ${filter.where}` : ""}
-  `).get(...(filter?.params || []));
+  `).get(...(filter.params || []));
 
-  const totalSeconds = row.totalPlays * AVG_TRACK_SECONDS;
-  
-  const totalMinutes = Math.round(totalSeconds / 60); 
-  
-  const avgPerDay = row.days
-    ? (row.totalPlays / row.days).toFixed(1)
-    : 0;
+  const totalMinutes = Math.round((row.totalPlays * AVG_TRACK_SECONDS) / 60);
+  const avgPerDay = row.days ? (row.totalPlays / row.days).toFixed(1) : 0;
 
   res.json({
     totalPlays: row.totalPlays,
-    totalMinutes: totalMinutes,
+    totalMinutes,
     avgPerDay
   });
 });
 
 app.get("/api/top-albums", async (req, res) => {
-  const { year, month, range } = req.query;
-
-  let filter;
-  if (range) {
-    filter = buildRangeFilter(range);
-  } else {
-    filter = buildDateFilter(year, month);
-  }
-
+  const filter = getActiveFilter(req.query);
   const filterClause = filter.where ? `AND ${filter.where}` : '';
-  
+
   const albums = db.prepare(`
     SELECT artist, album, album_image, COUNT(*) plays
     FROM scrobbles
@@ -163,7 +131,7 @@ app.get("/api/top-albums", async (req, res) => {
     GROUP BY artist, album
     ORDER BY plays DESC
     LIMIT 12
-  `).all(...filter.params);
+  `).all(...(filter.params || []));
 
   for (const a of albums) {
     if (!a.album_image) {
@@ -190,43 +158,32 @@ app.get("/api/recent-scrobbles", async (req, res) => {
       }
     });
 
-    const tracks = response.data?.recenttracks?.track || [];
-    const attr = response.data?.recenttracks?.["@attr"];
+    const recentTracks = response.data?.recenttracks;
+    const tracks = recentTracks?.track || [];
+    const attr = recentTracks?.["@attr"];
 
     const parsed = tracks
-    .filter(t => {
-      if (page > 1 && t["@attr"]?.nowplaying) {
-        return false;
-      }
-      return true;
-    })
-    .map(t => ({
-      track: t.name,
-      artist: t.artist["#text"],
-      image:
-        t.image?.find(i => i.size === "extralarge")?.["#text"] ||
-        t.image?.find(i => i.size === "large")?.["#text"] ||
-        null,
-      nowPlaying: Boolean(t["@attr"]?.nowplaying),
-      date: t.date ? Number(t.date.uts) * 1000 : null
-    }));
-
-
-    const totalPages = Number(attr?.totalPages || 1);
+      .filter(t => !(page > 1 && t["@attr"]?.nowplaying))
+      .map(t => ({
+        track: t.name,
+        artist: t.artist["#text"],
+        image: t.image?.find(i => i.size === "extralarge")?.["#text"] ||
+               t.image?.find(i => i.size === "large")?.["#text"] || null,
+        nowPlaying: Boolean(t["@attr"]?.nowplaying),
+        date: t.date ? Number(t.date.uts) * 1000 : null
+      }));
 
     res.json({
       tracks: parsed,
-      hasMore: page < totalPages
+      hasMore: page < Number(attr?.totalPages || 1)
     });
 
   } catch (err) {
-    console.error("[recent-scrobbles ERROR]");
-    console.error(err.response?.data || err.message);
+    console.error("[recent-scrobbles ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch recent scrobbles" });
   }
 });
 
-
-app.listen(3000, () => {
-  console.log("Dashboard em http://localhost:3000");
+app.listen(PORT, () => {
+  console.log(`🚀 Dashboard rodando em http://localhost:${PORT}`);
 });

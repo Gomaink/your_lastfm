@@ -6,60 +6,62 @@ import { loadTopSongs } from "./topSongs.js";
 import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
 
-const loading = document.getElementById("global-loading");
+const UI = {
+  loading: document.getElementById("global-loading"),
+  scrobblesView: document.getElementById("scrobbles-view"),
+  dashboardSections: Array.from(document.querySelectorAll("main > section"))
+    .filter(sec => sec.id !== "scrobbles-view"),
+  navButtons: document.querySelectorAll(".nav-btn")
+};
 
-async function reload() {
-  loading.style.display = "flex";
+const CHART_DAILY_CONFIG = {
+  url: "/api/plays-per-day",
+  canvasId: "daily",
+  labelKey: "day",
+  valueKey: "plays",
+  label: "Plays por dia"
+};
 
-  await Promise.all([
-    loadSummary(),
-    loadAlbums(),
-    loadTopSongs(),
-    loadTopArtists(),
-    loadChart({
-      url: "/api/plays-per-day",
-      canvasId: "daily",
-      labelKey: "day",
-      valueKey: "plays",
-      label: "Plays por dia"
-    })
-  ]);
-
-  loading.style.display = "none";
-}
-
-initFilters(() => {
-  reload();
-});
-
-reload();
-
-const navButtons = document.querySelectorAll(".nav-btn");
-const scrobblesView = document.getElementById("scrobbles-view");
-
-const dashboardSections = Array.from(
-  document.querySelectorAll("main > section")
-).filter(sec => sec.id !== "scrobbles-view");
-
-function setActiveView(view) {
-  navButtons.forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.view === view);
-  });
-
-  if (view === "scrobbles") {
-    scrobblesView.classList.remove("d-none");
-    dashboardSections.forEach(sec => sec.classList.add("d-none"));
-    loadScrobbles(true);
-  } else {
-    dashboardSections.forEach(sec => sec.classList.remove("d-none"));
-    scrobblesView.classList.add("d-none");
+async function reloadDashboardData() {
+  UI.loading.style.display = "flex";
+  
+  try {
+    await Promise.all([
+      loadSummary(),
+      loadAlbums(),
+      loadTopSongs(),
+      loadTopArtists(),
+      loadChart(CHART_DAILY_CONFIG)
+    ]);
+  } catch (error) {
+    console.error("Erro ao carregar dashboard:", error);
+  } finally {
+    UI.loading.style.display = "none";
   }
 }
 
-navButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
-    setActiveView(btn.dataset.view);
-  });
+function toggleView(viewName) {
+  const isScrobbles = viewName === "scrobbles";
+
+  UI.navButtons.forEach(btn => 
+    btn.classList.toggle("active", btn.dataset.view === viewName)
+  );
+
+  UI.scrobblesView.classList.toggle("d-none", !isScrobbles);
+  UI.dashboardSections.forEach(sec => sec.classList.toggle("d-none", isScrobbles));
+
+  if (isScrobbles) {
+    loadScrobbles(true);
+  }
+}
+
+UI.navButtons.forEach(btn => {
+  btn.addEventListener("click", () => toggleView(btn.dataset.view));
 });
 
-setActiveView("dashboard");
+initFilters(() => {
+  reloadDashboardData();
+});
+
+toggleView("dashboard");
+reloadDashboardData();
