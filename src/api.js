@@ -185,5 +185,5 @@ app.get("/api/recent-scrobbles", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Dashboard rodando em http://localhost:${PORT}`);
+  console.log(`🚀 Dashboard running in http://localhost:${PORT}`);
 });

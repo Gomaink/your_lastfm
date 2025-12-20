@@ -51,7 +51,7 @@ async function fetchLastfmPage(page, retries = 3) {
 
   } catch (err) {
     if (retries > 0) {
-      console.warn(`⚠️ Erro na página ${page}. Tentando novamente em ${CONFIG.RETRY_DELAY / 1000}s...`);
+      console.warn(`⚠️ Error on page ${page}. Retrying in ${CONFIG.RETRY_DELAY / 1000}s...`);
       await sleep(CONFIG.RETRY_DELAY);
       return fetchLastfmPage(page, retries - 1);
     }
@@ -60,7 +60,7 @@ async function fetchLastfmPage(page, retries = 3) {
 }
 
 async function sync(page_limit = 0) {
-  console.log("🚀 Iniciando sincronização completa com Last.fm...");
+  console.log("🚀 Starting full synchronization with Last.fm...");
   
   let page = 1;
   let totalPages = 1;
@@ -68,7 +68,7 @@ async function sync(page_limit = 0) {
 
   try {
     do {
-      console.log(`📥 Baixando página ${page} de ${totalPages || '?' }...`);
+      console.log(`📥 Downloading page ${page} of ${totalPages || '?' }...`);
       const data = await fetchLastfmPage(page);
       
       totalPages = Number(data["@attr"].totalPages);
@@ -77,7 +77,7 @@ async function sync(page_limit = 0) {
       const insertedInPage = runSyncTransaction(tracks);
       totalInserted += insertedInPage;
 
-      console.log(`✅ Página ${page} processada. (+${insertedInPage} novos | Total: ${totalInserted})`);
+      console.log(`✅ Page ${page} processed. (+${insertedInPage} new | Total: ${totalInserted})`);
 
       if (page_limit !== 0 && page >= page_limit) break;
 
@@ -86,9 +86,9 @@ async function sync(page_limit = 0) {
 
     } while (page <= totalPages);
 
-    console.log(`\n✨ Sync finalizado! ${totalInserted} novos scrobbles adicionados ao banco.`);
+    console.log(`\n✨ Sync finished! ${totalInserted} new scrobbles added to the database.`);
   } catch (err) {
-    console.error("\n❌ Falha crítica no sync:", err.message);
+    console.error("\n❌ Critical sync failure:", err.message);
   }
 }
 

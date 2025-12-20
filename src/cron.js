@@ -2,9 +2,11 @@ require("dotenv").config();
 const cron = require("node-cron");
 const sync = require("./index");
 
+let running = false;
+
 cron.schedule("*/10 * * * *", async () => {
   if (running) {
-    console.log("⏳ Sync já em execução, pulando...");
+    console.log("⏳ Sync already in progress, skipping...");
     return;
   }
 
@@ -12,8 +14,9 @@ cron.schedule("*/10 * * * *", async () => {
 
   try {
     await sync();
+    console.log("✅ Sync completed successfully");
   } catch (err) {
-    console.error("❌ Erro no sync:", err);
+    console.error("❌ Sync error:", err);
   } finally {
     running = false;
   }

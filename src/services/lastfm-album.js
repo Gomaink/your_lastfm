@@ -18,7 +18,7 @@ async function getAlbumImage(artist, album) {
 
     const images = data?.album?.image;
     if (!images || images.length === 0) {
-      console.log(`⚠️ Sem imagem: ${artist} - ${album}`);
+      console.log(`⚠️ No image: ${artist} - ${album}`);
       return null;
     }
 
@@ -26,7 +26,7 @@ async function getAlbumImage(artist, album) {
     return image || null;
 
   } catch (err) {
-    console.error(`❌ Erro capa ${artist} - ${album}`);
+    console.error(`❌ Cover error ${artist} - ${album}`);
     if (err.response?.data) {
       console.error(err.response.data);
     }

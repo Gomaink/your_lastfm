@@ -35,7 +35,7 @@ export async function loadScrobbles(reset = true) {
           <div class="scrobble-track">${s.track}</div>
           <div class="scrobble-artist">${s.artist}</div>
           <div class="scrobble-time">
-            ${s.nowPlaying ? `<i class="mdi mdi-access-point me-1 text-green"></i>Tocando agora` : timeAgo(s.date)}
+            ${s.nowPlaying ? `<i class="mdi mdi-access-point me-1 text-green"></i>Listening now` : timeAgo(s.date)}
           </div>
         </div>
       </div>
@@ -63,8 +63,8 @@ function timeAgo(ts) {
 
   const diff = Math.floor((Date.now() - ts) / 1000);
 
-  if (diff < 60) return "agora mesmo";
-  if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h atrás`;
-  return `${Math.floor(diff / 86400)} dias atrás`;
+  if (diff < 60) return "just now"; 
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`; 
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+  return `${Math.floor(diff / 86400)} days ago`; 
 }

@@ -19,7 +19,7 @@ const CHART_DAILY_CONFIG = {
   canvasId: "daily",
   labelKey: "day",
   valueKey: "plays",
-  label: "Plays por dia"
+  label: "Plays per day"
 };
 
 async function reloadDashboardData() {
@@ -34,7 +34,7 @@ async function reloadDashboardData() {
       loadChart(CHART_DAILY_CONFIG)
     ]);
   } catch (error) {
-    console.error("Erro ao carregar dashboard:", error);
+    console.error("Error loading dashboard:", error);
   } finally {
     UI.loading.style.display = "none";
   }
