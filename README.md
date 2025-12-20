@@ -53,6 +53,10 @@ To build and start the application in detached mode (running in the background):
   docker compose up --build -d
   ```
 
+Then, wait for the scrobbles to synchronize (this may take a while, check the logs).
+
+Finally, access the website at http://yourip:1533/
+
 ## License
 
 This project is licensed under the MIT License.
