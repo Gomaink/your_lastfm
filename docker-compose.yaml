@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: node_scrobbler
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "1533:1533"
+    restart: unless-stopped

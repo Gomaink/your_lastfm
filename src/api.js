@@ -10,7 +10,7 @@ const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 1533;
 const AVG_TRACK_SECONDS = 180;
 
 app.use(cors());
