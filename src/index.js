@@ -5,7 +5,7 @@ const db = require("./db");
 const CONFIG = {
   API_URL: "https://ws.audioscrobbler.com/2.0/",         
   RETRY_DELAY: 3000,       
-  REQUEST_DELAY: 1200,     
+  REQUEST_DELAY: 300,     
   PER_PAGE: 200
 };
 
@@ -14,6 +14,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const insertScrobble = db.prepare(`
   INSERT OR IGNORE INTO scrobbles (artist, track, album, played_at)
   VALUES (?, ?, ?, ?)
+`);
+
+const getLastPlayedAt = db.prepare(`
+  SELECT MAX(played_at) as last FROM scrobbles
 `);
 
 const runSyncTransaction = db.transaction((tracks) => {
@@ -59,37 +63,67 @@ async function fetchLastfmPage(page, retries = 3) {
   }
 }
 
-async function sync(page_limit = 0) {
-  console.log("🚀 Starting full synchronization with Last.fm...");
-  
+async function sync() {
+  console.log("🔄 Starting incremental sync with Last.fm...");
+
+  const row = getLastPlayedAt.get();
+  const lastPlayedAt = row?.last || 0;
+
+  if (lastPlayedAt === 0) {
+    console.log("🆕 Empty database, running full sync...");
+  } else {
+    console.log(
+      `⏱️ Last scrobble in DB: ${new Date(lastPlayedAt * 1000).toISOString()}`
+    );
+  }
+
   let page = 1;
-  let totalPages = 1;
   let totalInserted = 0;
+  let shouldStop = false;
 
   try {
-    do {
-      console.log(`📥 Downloading page ${page} of ${totalPages || '?' }...`);
+    while (!shouldStop) {
+      console.log(`📥 Fetching page ${page}...`);
+
       const data = await fetchLastfmPage(page);
-      
-      totalPages = Number(data["@attr"].totalPages);
       const tracks = data.track || [];
 
-      const insertedInPage = runSyncTransaction(tracks);
-      totalInserted += insertedInPage;
+      if (tracks.length === 0) break;
 
-      console.log(`✅ Page ${page} processed. (+${insertedInPage} new | Total: ${totalInserted})`);
+      const newTracks = [];
 
-      if (page_limit !== 0 && page >= page_limit) break;
+      for (const track of tracks) {
+        if (!track.date) continue;
+
+        const playedAt = Number(track.date.uts);
+
+        if (playedAt <= lastPlayedAt) {
+          shouldStop = true;
+          break;
+        }
+
+        newTracks.push(track);
+      }
+
+      const inserted = runSyncTransaction(newTracks);
+      totalInserted += inserted;
+
+      console.log(`✅ Page ${page}: +${inserted} new scrobbles`);
+
+      if (shouldStop) {
+        console.log("🛑 Reached already synced scrobbles, stopping.");
+        break;
+      }
 
       page++;
       await sleep(CONFIG.REQUEST_DELAY);
+    }
 
-    } while (page <= totalPages);
-
-    console.log(`\n✨ Sync finished! ${totalInserted} new scrobbles added to the database.`);
+    console.log(`✨ Sync finished — ${totalInserted} new scrobbles added.`);
   } catch (err) {
-    console.error("\n❌ Critical sync failure:", err.message);
+    console.error("❌ Sync failed:", err.message);
   }
 }
+
 
 sync();

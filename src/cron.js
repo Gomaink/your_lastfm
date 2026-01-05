@@ -4,7 +4,7 @@ const sync = require("./index");
 
 let running = false;
 
-cron.schedule("*/10 * * * *", async () => {
+cron.schedule("*/5 * * * *", async () => {
   if (running) {
     console.log("⏳ Sync already in progress, skipping...");
     return;
