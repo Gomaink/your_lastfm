@@ -126,6 +126,4 @@ async function sync() {
 }
 
 
-sync();
-
-module.exports = sync;
+module.exports = { sync };
