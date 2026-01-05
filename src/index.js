@@ -127,3 +127,5 @@ async function sync() {
 
 
 sync();
+
+module.exports = sync;
