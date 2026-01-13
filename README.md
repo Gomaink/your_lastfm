@@ -35,8 +35,6 @@ Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to
 
 `Explanation:` Your LastFM uses the Spotify API exclusively to obtain artist images.
 
-Spotify: Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), create an app, and retrieve your Client ID and Client Secret.
-
 ### Create a environment file:
 
 In your terminal, run:
@@ -49,8 +47,6 @@ Copy and paste the following template:
   ```bash
   LASTFM_API_KEY=your_key_here
   LASTFM_USERNAME=your_username_here
-  SPOTIFY_CLIENT_ID=your_id_here
-  SPOTIFY_CLIENT_SECRET=your_secret_here
   ```
 Press Ctrl + O then Enter to save, and Ctrl + X to exit.
 
