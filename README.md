@@ -20,7 +20,7 @@ The project is fully containerized with **Docker**, using an automated entrypoin
 * [Docker](https://docs.docker.com/get-docker/)
 * [Docker Compose](https://docs.docker.com/compose/install/)
 
-## Quick start
+## Installation
 
 ### Create a `.env` file
 
@@ -33,7 +33,7 @@ Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to
 
 ### Docker Compose
 
-```
+```yml
 services:
   your-lastfm:
     image: gomaink/your_lastfm
