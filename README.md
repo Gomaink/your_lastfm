@@ -22,42 +22,52 @@ The project is fully containerized with **Docker**, using an automated entrypoin
 
 ## Configuration
 
-### Clone the repository:
-  ```bash
-  git clone https://github.com/Gomaink/your_lastfm.git
-  cd your_lastfm
-  ```
-### Setup environment variables:
+## 🐳 Quick start
 
-**Get Your API Keys**
+### 1️⃣ Create a `.env` file
+
+```
+LASTFM_API_KEY=your_lastfm_api_key
+LASTFM_USERNAME=your_lastfm_username
+```
 
 Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to get your API Key.
 
-### Create a environment file:
+### 2️⃣ Run with Docker
 
-In your terminal, run:
+```
+docker run -d \
+  --name your-lastfm \
+  -p 1533:1533 \
+  --env-file .env \
+  -v ./data:/app/data \
+  gomaink/your_lastfm
+```
+Then open:
 
-  ```bash
-  nano .env
-  ```
+```
+http://localhost:1533
+```
 
-Copy and paste the following template:
-  ```bash
-  LASTFM_API_KEY=your_key_here
-  LASTFM_USERNAME=your_username_here
-  ```
-Press Ctrl + O then Enter to save, and Ctrl + X to exit.
+(or replace `localhost` with your server IP)
 
-## Usage
+#### 🧱 Docker Compose (recommended)
 
-To build and start the application in detached mode (running in the background):
-  ```
-  docker compose up --build -d
-  ```
+```
+services:
+  your-lastfm:
+    image: gomaink/your_lastfm
+    container_name: your-lastfm
+    ports:
+      - "1533:1533"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
 
-Then, wait for the scrobbles to synchronize (this may take a while, check the logs).
-
-Finally, access the website at http://yourip:1533/
+`docker compose up -d`
 
 ## License
 
