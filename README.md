@@ -47,9 +47,10 @@ services:
     restart: unless-stopped
 ```
 
+On terminal:
 `docker compose up -d`
 
-
+Then access:
 ```
 http://localhost:1533
 ```
