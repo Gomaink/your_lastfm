@@ -22,7 +22,7 @@ The project is fully containerized with **Docker**, using an automated entrypoin
 
 ## Quick start
 
-### 1️⃣ Create a `.env` file
+### Create a `.env` file
 
 ```
 LASTFM_API_KEY=your_lastfm_api_key
@@ -31,7 +31,7 @@ LASTFM_USERNAME=your_lastfm_username
 
 Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to get your API Key.
 
-### 2️⃣ Run with Docker
+### Docker Compose
 
 ```
 services:
