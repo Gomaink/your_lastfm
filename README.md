@@ -34,24 +34,6 @@ Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to
 ### 2️⃣ Run with Docker
 
 ```
-docker run -d \
-  --name your-lastfm \
-  -p 1533:1533 \
-  --env-file .env \
-  -v ./data:/app/data \
-  gomaink/your_lastfm
-```
-Then open:
-
-```
-http://localhost:1533
-```
-
-(or replace `localhost` with your server IP)
-
-#### 🧱 Docker Compose (recommended)
-
-```
 services:
   your-lastfm:
     image: gomaink/your_lastfm
@@ -66,6 +48,13 @@ services:
 ```
 
 `docker compose up -d`
+
+
+```
+http://localhost:1533
+```
+
+(or replace `localhost` with your server IP)
 
 ## License
 
