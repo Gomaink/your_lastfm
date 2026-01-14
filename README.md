@@ -36,7 +36,7 @@ Last.fm: Create an API account [here](https://www.last.fm/api/account/create) to
 ```yml
 services:
   your-lastfm:
-    image: gomaink/your_lastfm
+    image: gomaink/your-lastfm
     container_name: your-lastfm
     ports:
       - "1533:1533"
