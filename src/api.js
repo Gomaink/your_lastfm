@@ -4,15 +4,19 @@ const cors = require("cors");
 const axios = require("axios");
 const path = require("path");
 const db = require("./db");
+const multer = require("multer");
 const { getActiveFilter } = require("./utils/filters");
 
 const { buildRangeFilter, fillMissingDates } = require("./utils/dateRange");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
+const { importScrobbleCSV } = require("./services/importScrobbleCSV");
+const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 
 const app = express();
 const PORT = process.env.PORT || 1533;
 const AVG_TRACK_SECONDS = 180;
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
 app.use(express.json());
@@ -23,7 +27,7 @@ app.get("/api/top-artists", async (req, res) => {
 
   try {
     const filter = getActiveFilter(req.query);
-    
+
     console.log(`[Top Artists] Filter: "${filter.where}" | Params: ${filter.params}`);
 
     const query = `
@@ -124,7 +128,7 @@ app.get("/api/top-albums", async (req, res) => {
     SELECT artist, album, album_image, COUNT(*) plays
     FROM scrobbles
     WHERE album IS NOT NULL
-    ${filterClause} 
+    ${filterClause}
     GROUP BY artist, album
     ORDER BY plays DESC
     LIMIT 12
@@ -179,6 +183,38 @@ app.get("/api/recent-scrobbles", async (req, res) => {
     console.error("[recent-scrobbles ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch recent scrobbles" });
   }
+});
+
+app.post("/api/import/scrobbles", upload.single("file"), (req, res) => {
+  if(!req.file) {
+    res.status(400).json({ error: "No file uploaded" });
+    return;
+  }
+
+  const allowedMimeTypes = [
+    "text/csv",
+    "application/vnd.ms-excel",
+    "text/plain",
+    "application/csv"
+  ];
+
+  if (!allowedMimeTypes.includes(req.file.mimetype)) {
+    return res.status(400).json({
+      error: `Invalid file type: ${req.file.mimetype}`
+    });
+  }
+
+  importScrobbleCSV(req.file.buffer, res);
+})
+
+app.get("/api/export/scrobbles", (req, res) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="scrobbles.csv"'
+  );
+
+  exportScrobbleCSV(res);
 });
 
 app.listen(PORT, () => {

@@ -5,6 +5,7 @@ import { loadChart } from "./charts.js";
 import { loadTopSongs } from "./topSongs.js";
 import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
+import { LoadExportCSV, LoadImportCSV } from "./csv.js";
 
 const UI = {
   loading: document.getElementById("global-loading"),
@@ -22,9 +23,12 @@ const CHART_DAILY_CONFIG = {
   label: "Plays per day"
 };
 
+LoadExportCSV();
+LoadImportCSV();
+
 async function reloadDashboardData() {
   UI.loading.style.display = "flex";
-  
+
   try {
     await Promise.all([
       loadSummary(),
@@ -43,7 +47,7 @@ async function reloadDashboardData() {
 function toggleView(viewName) {
   const isScrobbles = viewName === "scrobbles";
 
-  UI.navButtons.forEach(btn => 
+  UI.navButtons.forEach(btn =>
     btn.classList.toggle("active", btn.dataset.view === viewName)
   );
 
