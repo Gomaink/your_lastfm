@@ -1,7 +1,9 @@
 const { getAlbumImage } = require("./lastfm-album");
+const { getDeezerAlbumImage } = require("./deezer-album");
 const db = require("../db");
 
 async function ensureAlbumCover(artist, album) {
+
   const row = db.prepare(`
     SELECT album_image
     FROM scrobbles
@@ -14,8 +16,20 @@ async function ensureAlbumCover(artist, album) {
     return row.album_image;
   }
 
-  const image = await getAlbumImage(artist, album);
-  if (!image) return null;
+  let image = null;
+
+  image = await getAlbumImage(artist, album);
+
+  if (!image) {
+    image = await getDeezerAlbumImage(artist, album);
+
+    if (image) {
+    }
+  }
+
+  if (!image) {
+    return null;
+  }
 
   db.prepare(`
     UPDATE scrobbles
