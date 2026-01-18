@@ -5,13 +5,16 @@ const axios = require("axios");
 const path = require("path");
 const db = require("./db");
 const multer = require("multer");
-const { getActiveFilter } = require("./utils/filters");
 
+
+const { getActiveFilter } = require("./utils/filters");
 const { fillMissingDates } = require("./utils/dateRange");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
 const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
+const { ensureTrackDuration } = require("./services/trackDurationCache");
+
 
 const app = express();
 const PORT = process.env.PORT || 1533;
@@ -64,17 +67,19 @@ app.get("/api/top-tracks", async (req, res) => {
   const rows = db.prepare(`
     SELECT
       track, artist, album, album_image,
-      COUNT(*) plays,
-      COUNT(*) * ? total_seconds
+      COUNT(*) plays
     FROM scrobbles
     WHERE album IS NOT NULL
     ${filter.where ? `AND ${filter.where}` : ""}
     GROUP BY track, artist, album
     ORDER BY plays DESC
     LIMIT 20
-  `).all(AVG_TRACK_SECONDS, ...(filter.params || []));
+  `).all(...(filter.params || []));
 
   for (const row of rows) {
+    const duration = await ensureTrackDuration(row.artist, row.track);
+    row.total_seconds = duration * row.plays;
+
     if (!row.album_image) {
       row.album_image = await ensureAlbumCover(row.artist, row.album);
     }

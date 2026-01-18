@@ -8,6 +8,7 @@ db.prepare(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     artist TEXT NOT NULL,
     track TEXT NOT NULL,
+    track_duration INTEGER NOT NULL,
     album TEXT,
     album_image TEXT,
     played_at INTEGER NOT NULL,
@@ -26,9 +27,9 @@ db.prepare(`
 
 try {
   db.prepare(`
-    ALTER TABLE scrobbles ADD COLUMN album_image TEXT
+    ALTER TABLE scrobbles ADD COLUMN track_duration INTEGER;
   `).run();
-  console.log("✅ coluna album_image adicionada");
+  console.log("✅ coluna track_duration adicionada");
 } catch (e) {
 }
 
