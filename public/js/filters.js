@@ -23,8 +23,11 @@ export function initFilters(onChange) {
   const currentYear = new Date().getFullYear();
 
   yearSelect.innerHTML = `<option value="">All</option>`;
-  for (let y = currentYear; y >= currentYear - 10; y--) {
-    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+  for (let y = currentYear; y >= 2002; y--) {
+    const opt = document.createElement("option");
+    opt.value = y;
+    opt.textContent = y;
+    yearSelect.appendChild(opt);
   }
 
   function handleManualChange() {
