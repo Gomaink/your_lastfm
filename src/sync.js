@@ -72,6 +72,12 @@ async function fetchLastfmPage(page) {
   }
 }
 
+async function getTotalPages() {
+  const data = await fetchLastfmPage(1);
+  const totalPages = parseInt(data["@attr"]?.totalPages || 1);
+  return totalPages;
+}
+
 
 async function sync(options = {}) {
   const isFullSync = options.full === true;
@@ -85,14 +91,20 @@ async function sync(options = {}) {
   const row = getLastPlayedAt.get();
   const lastPlayedAt = isFullSync ? 0 : (row?.last || 0);
 
+  // Get total pages
+  const totalPages = await getTotalPages();
+
   let page = 1;
   let shouldStop = false;
+  let totalInserted = 0;
 
   while (!shouldStop) {
     const data = await fetchLastfmPage(page);
     const tracks = data.track || [];
 
-    if (!tracks.length) break;
+    if (!tracks.length) {
+      break;
+    }
 
     const newTracks = [];
 
@@ -106,12 +118,21 @@ async function sync(options = {}) {
       newTracks.push(track);
     }
 
-    runSyncTransaction(newTracks);
+    const inserted = runSyncTransaction(newTracks);
+    totalInserted += inserted;
+
+    // Show progress every 10 pages
+    if (page % 10 === 0 || page === totalPages) {
+      const percent = Math.round((page / totalPages) * 100);
+      console.log(`[${page}/${totalPages}] ${percent}%`);
+    }
+
     page++;
+
     await sleep(CONFIG.REQUEST_DELAY);
   }
 
-  console.log("✨ Sync finished");
+  console.log(`✨ Sync finished - Total new scrobbles: ${totalInserted}`);
 }
 
 module.exports = { sync };

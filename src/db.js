@@ -8,7 +8,7 @@ db.prepare(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     artist TEXT NOT NULL,
     track TEXT NOT NULL,
-    track_duration INTEGER NOT NULL,
+    track_duration INTEGER,
     album TEXT,
     album_image TEXT,
     played_at INTEGER NOT NULL,
