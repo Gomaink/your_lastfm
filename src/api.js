@@ -17,7 +17,7 @@ const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { fetchWithRetry } = require("./utils/fetchRetry");
-const { sanitizeAxiosConfig } = require("./utils/sanitizeAxios");
+const { sanitizeError } = require("./utils/sanitizeAxios");
 
 
 const app = express();
@@ -224,11 +224,7 @@ app.get("/api/recent-scrobbles", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("[recent-scrobbles ERROR]", {
-      message: err.message,
-      status: err.response?.status,
-      config: sanitizeAxiosConfig(err.config)
-    });
+    console.error("[recent-scrobbles ERROR]", sanitizeError(err));
 
     res.status(500).json({ error: "Failed to fetch recent scrobbles" });
   }

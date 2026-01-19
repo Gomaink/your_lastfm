@@ -2,7 +2,7 @@ require("dotenv").config();
 const axios = require("axios");
 const db = require("./db");
 const { fetchWithRetry } = require("./utils/fetchRetry");
-const { sanitizeAxiosConfig } = require("./utils/sanitizeAxios");
+const { sanitizeAxiosConfig, sanitizeError } = require("./utils/sanitizeAxios");
 
 const CONFIG = {
   API_URL: "https://ws.audioscrobbler.com/2.0/",
@@ -66,7 +66,7 @@ async function fetchLastfmPage(page) {
   } catch (err) {
     console.error(
       "[Last.fm sync error]",
-      sanitizeAxiosConfig(err.config)
+      sanitizeError(err)
     );
     throw err;
   }
