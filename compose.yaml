@@ -7,5 +7,5 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "1231:1533"
+      - "1533:1533"
     restart: unless-stopped
