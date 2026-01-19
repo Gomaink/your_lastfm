@@ -1,7 +1,7 @@
 const axios = require("axios");
 require("dotenv").config();
 const { fetchWithRetry } = require("../utils/fetchRetry");
-const { sanitizeAxiosConfig } = require("../utils/sanitizeAxios");
+const { sanitizeError } = require("../utils/sanitizeAxios");
 
 
 const LASTFM_URL = "https://ws.audioscrobbler.com/2.0/";
@@ -29,7 +29,7 @@ async function getAlbumImage(artist, album) {
   } catch (err) {
     console.warn(
       `⚠️ [Last.fm] Album image failed: ${artist} - ${album}`,
-      sanitizeAxiosConfig(err.config)
+      sanitizeError(err)
     );
     return null;
   }
