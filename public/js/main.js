@@ -12,7 +12,7 @@ const UI = {
   scrobblesView: document.getElementById("scrobbles-view"),
   dashboardSections: Array.from(document.querySelectorAll("main > section"))
     .filter(sec => sec.id !== "scrobbles-view"),
-  navButtons: document.querySelectorAll(".nav-btn")
+  sidebarButtons: document.querySelectorAll(".sidebar-link")
 };
 
 const CHART_DAILY_CONFIG = {
@@ -44,22 +44,34 @@ async function reloadDashboardData() {
   }
 }
 
+function closeSidebarOnMobile() {
+  if (window.innerWidth <= 768) {
+    document.querySelector(".sidebar")?.classList.remove("open");
+    document.getElementById("sidebar-overlay")?.classList.remove("active");
+  }
+}
+
 function toggleView(viewName) {
   const isScrobbles = viewName === "scrobbles";
 
-  UI.navButtons.forEach(btn =>
-    btn.classList.toggle("active", btn.dataset.view === viewName)
-  );
+  UI.sidebarButtons.forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === viewName);
+  });
 
   UI.scrobblesView.classList.toggle("d-none", !isScrobbles);
-  UI.dashboardSections.forEach(sec => sec.classList.toggle("d-none", isScrobbles));
+  UI.dashboardSections.forEach(sec =>
+    sec.classList.toggle("d-none", isScrobbles)
+  );
 
   if (isScrobbles) {
     loadScrobbles(true);
   }
+
+  closeSidebarOnMobile();
 }
 
-UI.navButtons.forEach(btn => {
+
+UI.sidebarButtons.forEach(btn => {
   btn.addEventListener("click", () => toggleView(btn.dataset.view));
 });
 

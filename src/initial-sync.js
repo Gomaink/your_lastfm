@@ -12,6 +12,6 @@ if (row.count > 0) {
 (async () => {
   console.log("🚀 Running FULL initial sync...");
   await sync({ full: true });
-  console.log("✅ Initial sync finished");
+  console.log("✅ FULL initial sync finished");
   process.exit(0);
 })();
