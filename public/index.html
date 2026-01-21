@@ -45,17 +45,17 @@
                         <button class="sidebar-link" data-view="scrobbles">
                             <i class="mdi mdi-history"></i> Scrobbles
                         </button>
-                        <!-- <button class="sidebar-link">
+                        <button class="sidebar-link" data-view="friends">
                             <i class="mdi mdi-account-multiple"></i> Friends
                         </button>
-                        <button class="sidebar-link">
+                        <button class="sidebar-link" data-view="share">
                             <i class="mdi mdi-share-variant"></i> Share
-                        </button> -->
+                        </button>
                     </nav>
                 </div>
 
                 <div class="sidebar-bottom">
-                    <button class="sidebar-link account">
+                    <button class="sidebar-link account" data-view="account">
                     <i class="mdi mdi-account"></i> Account
                     </button>
                 </div>
@@ -67,145 +67,147 @@
                     <i class="mdi mdi-menu"></i>
                 </button>
 
-                <section class="filters-bar mb-4">
-                    <div class="range-filters">
-                        <button class="range-pill" data-range="day">
-                            Last day
-                        </button>
-                        <button class="range-pill" data-range="week">
-                            Last week
-                        </button>
-                        <button class="range-pill" data-range="month">
-                            Last month
-                        </button>
-                        <button class="range-pill" data-range="year">
-                            Last year
-                        </button>
-                    </div>
-
-                    <div class="manual-filters">
-                        <div class="filter-group">
-                            <span class="filter-label">Year</span>
-                            <select id="year" class="filter-select"></select>
+                <section id="dashboard-view" class="d-none mt-4">
+                    <section class="filters-bar mb-4">
+                        <div class="range-filters">
+                            <button class="range-pill" data-range="day">
+                                Last day
+                            </button>
+                            <button class="range-pill" data-range="week">
+                                Last week
+                            </button>
+                            <button class="range-pill" data-range="month">
+                                Last month
+                            </button>
+                            <button class="range-pill" data-range="year">
+                                Last year
+                            </button>
                         </div>
 
-                        <div class="filter-group">
-                            <span class="filter-label">Month</span>
-                            <select id="month" class="filter-select">
-                                <option value="">All</option>
-                                <option value="1">January</option>
-                                <option value="2">February</option>
-                                <option value="3">March</option>
-                                <option value="4">April</option>
-                                <option value="5">May</option>
-                                <option value="6">June</option>
-                                <option value="7">July</option>
-                                <option value="8">August</option>
-                                <option value="9">September</option>
-                                <option value="10">October</option>
-                                <option value="11">November</option>
-                                <option value="12">December</option>
-                            </select>
-                        </div>
-                    </div>
-                </section>
+                        <div class="manual-filters">
+                            <div class="filter-group">
+                                <span class="filter-label">Year</span>
+                                <select id="year" class="filter-select"></select>
+                            </div>
 
-                <section class="row g-3 mb-4" id="summary-cards">
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card text-dark bg-light shadow-sm">
-                            <div class="card-body text-center text-gray">
-                                <i
-                                    class="mdi mdi-timer-outline me-1 text-green"
-                                ></i>
-                                Minutes Listened
-                                <p class="card-text fs-2" id="hours">0h</p>
+                            <div class="filter-group">
+                                <span class="filter-label">Month</span>
+                                <select id="month" class="filter-select">
+                                    <option value="">All</option>
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card text-dark bg-light shadow-sm">
-                            <div class="card-body text-center text-gray">
-                                <i
-                                    class="mdi mdi-music-note-outline me-1 text-green"
-                                ></i>
-                                Songs Played
-                                <p class="card-text fs-2" id="plays">0</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card text-dark bg-light shadow-sm">
-                            <div class="card-body text-center text-gray">
-                                <i
-                                    class="mdi mdi-calendar-range me-1 text-green"
-                                ></i>
-                                Daily Average
-                                <p class="card-text fs-2" id="avg">0</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section class="mb-5">
-                    <div class="mb-2">
-                        <i class="mdi mdi-album me-1 text-green"></i>
-                        Top Album
-                    </div>
-                    <div class="albums-scroll" id="albums-grid"></div>
-                </section>
-
-                <section class="row gy-4">
-                    <div class="col-md-6">
-                        <div class="card bg-light shadow-sm h-100">
-                            <div class="card-body d-flex flex-column text-light">
-                                <div class="card-header-title mb-3">
+                    <section class="row g-3 mb-4" id="summary-cards">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card text-dark bg-light shadow-sm">
+                                <div class="card-body text-center text-gray">
                                     <i
-                                        class="mdi mdi-account-music-outline text-green"
+                                        class="mdi mdi-timer-outline me-1 text-green"
                                     ></i>
-                                    <span>Top Artists</span>
+                                    Minutes Listened
+                                    <p class="card-text fs-2" id="hours">0h</p>
                                 </div>
-                                <div class="top-list" id="top-artists"></div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card bg-light shadow-sm h-100">
-                            <div class="card-body d-flex flex-column text-light">
-                                <div class="card-header-title mb-3">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card text-dark bg-light shadow-sm">
+                                <div class="card-body text-center text-gray">
                                     <i
-                                        class="mdi mdi-playlist-music-outline text-green"
+                                        class="mdi mdi-music-note-outline me-1 text-green"
                                     ></i>
-                                    <span>Top Songs</span>
+                                    Songs Played
+                                    <p class="card-text fs-2" id="plays">0</p>
                                 </div>
-                                <div class="top-songs-list flex-grow-1">
-                                    <div class="top-songs-header">
-                                        <span>#</span>
-                                        <span>Song / Artist</span>
-                                        <span>Plays</span>
-                                        <span>Total</span>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card text-dark bg-light shadow-sm">
+                                <div class="card-body text-center text-gray">
+                                    <i
+                                        class="mdi mdi-calendar-range me-1 text-green"
+                                    ></i>
+                                    Daily Average
+                                    <p class="card-text fs-2" id="avg">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="mb-5">
+                        <div class="mb-2">
+                            <i class="mdi mdi-album me-1 text-green"></i>
+                            Top Album
+                        </div>
+                        <div class="albums-scroll" id="albums-grid"></div>
+                    </section>
+
+                    <section class="row gy-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light shadow-sm h-100">
+                                <div class="card-body d-flex flex-column text-light">
+                                    <div class="card-header-title mb-3">
+                                        <i
+                                            class="mdi mdi-account-music-outline text-green"
+                                        ></i>
+                                        <span>Top Artists</span>
                                     </div>
-                                    <div id="top-songs"></div>
+                                    <div class="top-list" id="top-artists"></div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="col-md-12">
-                        <div class="card bg-light shadow-sm">
-                            <div class="card-body text-light">
-                                <div class="mb-3">
-                                    <i
-                                        class="mdi mdi-chart-line me-1 text-green"
-                                    ></i>
-                                    Plays per Day
-                                </div>
-                                <div class="chart-container">
-                                    <canvas id="daily"></canvas>
+                        <div class="col-md-6">
+                            <div class="card bg-light shadow-sm h-100">
+                                <div class="card-body d-flex flex-column text-light">
+                                    <div class="card-header-title mb-3">
+                                        <i
+                                            class="mdi mdi-playlist-music-outline text-green"
+                                        ></i>
+                                        <span>Top Songs</span>
+                                    </div>
+                                    <div class="top-songs-list flex-grow-1">
+                                        <div class="top-songs-header">
+                                            <span>#</span>
+                                            <span>Song / Artist</span>
+                                            <span>Plays</span>
+                                            <span>Total</span>
+                                        </div>
+                                        <div id="top-songs"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+
+                        <div class="col-md-12">
+                            <div class="card bg-light shadow-sm">
+                                <div class="card-body text-light">
+                                    <div class="mb-3">
+                                        <i
+                                            class="mdi mdi-chart-line me-1 text-green"
+                                        ></i>
+                                        Plays per Day
+                                    </div>
+                                    <div class="chart-container">
+                                        <canvas id="daily"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </section>
 
                 <section id="scrobbles-view" class="d-none mt-4">
@@ -221,6 +223,78 @@
                         >
                             Show more
                         </button>
+                    </div>
+                </section>
+
+                <section id="share-view" class="d-none mt-4">
+                    <div class="container-fluid p-4">
+                        <div class="row">
+                            <div class="col-lg-4 mb-4">
+                                <div class="card border-secondary shadow-lg sticky-top" style="top: 20px; z-index: 1;">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0 text-white">
+                                            <i class="mdi mdi-creation text-green me-2"></i>Generator
+                                        </h5>
+                                    </div>
+                                    <div class="card-body text-light">
+                                        
+                                        <div class="mb-4">
+                                            <label class="form-label text-gray text-uppercase small fw-bold">Time Period</label>
+                                            <select id="share-period" class="form-select bg-black text-light border-secondary">
+                                                <option value="7day">Last 7 Days</option>
+                                                <option value="30day">Last 30 Days</option>
+                                                <option value="3month">Last 3 Months</option>
+                                                <option value="6month">Last 6 Months</option>
+                                                <option value="year">Last Year</option>
+                                                <option value="all">All Time</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <label class="form-label text-gray text-uppercase small fw-bold">Include</label>
+                                            
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input bg-green" type="checkbox" value="albums" id="check-albums" checked>
+                                                <label class="form-check-label" for="check-albums">Top Albums</label>
+                                            </div>
+                                            
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input bg-green" type="checkbox" value="artists" id="check-artists" checked>
+                                                <label class="form-check-label" for="check-artists">Top Artists</label>
+                                            </div>
+
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input bg-green" type="checkbox" value="tracks" id="check-tracks" checked>
+                                                <label class="form-check-label" for="check-tracks">Top Tracks</label>
+                                            </div>
+                                        </div>
+
+                                        <button id="btn-generate" class="btn btn-success w-100 py-2 fw-bold text-uppercase">
+                                            Generate
+                                        </button>
+                                        
+                                        <a id="btn-download" href="#" class="btn btn-outline-light w-100 mt-3 d-none">
+                                            <i class="mdi mdi-download me-1"></i> Download Image
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-8 d-flex justify-content-center align-items-start bg-darker rounded p-4">
+                                
+                                <div id="share-loading" class="text-center text-muted py-5 d-none">
+                                    <div class="spinner-border text-success mb-3" role="status"></div>
+                                    <p>Generating your recap...</p>
+                                </div>
+
+                                <div id="share-placeholder" class="text-center text-secondary py-5">
+                                    <i class="mdi mdi-image-filter-hdr fs-1 opacity-25"></i>
+                                    <p class="mt-2">Select options and click Generate</p>
+                                </div>
+
+                                <img id="share-result" class="img-fluid shadow-lg rounded d-none" style="max-height: 85vh;" alt="Music Recap">
+                            </div>
+                        </div>
                     </div>
                 </section>
             </main>

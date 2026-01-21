@@ -6,6 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const fs = require("fs");
 const multer = require("multer");
+const { createCanvas, loadImage, registerFont } = require('canvas');
 
 const db = require("./db");
 
@@ -260,6 +261,218 @@ app.get("/api/export/scrobbles", (req, res) => {
   );
 
   exportScrobbleCSV(res);
+});
+
+app.get('/api/generate-share', async (req, res) => {
+    try {
+        const { period, types } = req.query; 
+        const selectedTypes = types ? types.split(',') : ['albums'];
+        
+        const now = Math.floor(Date.now() / 1000);
+        let start = 0;
+        switch (period) {
+            case '7day': start = now - (7 * 24 * 60 * 60); break;
+            case '30day': start = now - (30 * 24 * 60 * 60); break;
+            case '3month': start = now - (90 * 24 * 60 * 60); break;
+            case '6month': start = now - (180 * 24 * 60 * 60); break;
+            case 'year': start = now - (365 * 24 * 60 * 60); break;
+            case 'all': start = 0; break;
+            default: start = now - (7 * 24 * 60 * 60);
+        }
+
+        const data = {};
+        if (selectedTypes.includes('albums')) {
+            data.albums = db.prepare(`SELECT album, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? AND album_image IS NOT NULL AND album_image != '' GROUP BY album, artist ORDER BY play_count DESC LIMIT 9`).all(start);
+        }
+        if (selectedTypes.includes('artists')) {
+            data.artists = db.prepare(`SELECT s.artist, a.artist_image, COUNT(*) as play_count FROM scrobbles s LEFT JOIN artists a ON s.artist = a.artist WHERE s.played_at > ? GROUP BY s.artist ORDER BY play_count DESC LIMIT 6`).all(start);
+        }
+        if (selectedTypes.includes('tracks')) {
+            data.tracks = db.prepare(`SELECT track, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? GROUP BY track, artist ORDER BY play_count DESC LIMIT 5`).all(start);
+        }
+
+        if (!data.albums?.length && !data.artists?.length && !data.tracks?.length) {
+            return res.status(400).json({ error: "No data found." });
+        }
+
+        const width = 1080;
+        const headerHeight = 250;
+        const footerHeight = 100;
+        
+        let totalHeight = headerHeight + footerHeight;
+        if (selectedTypes.includes('albums') && data.albums.length > 0) totalHeight += 1150;
+        if (selectedTypes.includes('artists') && data.artists.length > 0) totalHeight += 900;
+        if (selectedTypes.includes('tracks') && data.tracks.length > 0) totalHeight += 950;
+
+        const canvas = createCanvas(width, totalHeight);
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#121212';
+        ctx.fillRect(0, 0, width, totalHeight);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 70px Sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`MY MUSIC RECAP`, width / 2, 100);
+
+        ctx.fillStyle = '#00e054';
+        let periodText = period === 'all' ? 'ALL TIME' : period.toUpperCase().replace('DAY', ' DAYS').replace('MONTH', ' MONTHS');
+        ctx.font = 'bold 40px Sans-serif';
+        ctx.fillText(periodText, width / 2, 170);
+
+        let currentY = headerHeight;
+
+        if (selectedTypes.includes('albums') && data.albums.length > 0) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 50px Sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('TOP ALBUMS', 60, currentY + 50);
+            
+            const gridSize = 300;
+            const gap = 30;
+            const startX = (width - ((3 * gridSize) + (2 * gap))) / 2;
+            const gridY = currentY + 100;
+
+            for (let i = 0; i < data.albums.length; i++) {
+                const item = data.albums[i];
+                const r = Math.floor(i / 3);
+                const c = i % 3;
+                const x = startX + c * (gridSize + gap);
+                const y = gridY + r * (gridSize + gap);
+
+                try {
+                    const img = await loadImage(item.album_image);
+                    ctx.drawImage(img, x, y, gridSize, gridSize);
+                    ctx.strokeStyle = '#222';
+                    ctx.strokeRect(x, y, gridSize, gridSize);
+                } catch(e) {
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(x, y, gridSize, gridSize);
+                }
+            }
+            currentY += 1150; 
+        }
+
+        if (selectedTypes.includes('artists') && data.artists.length > 0) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 50px Sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('TOP ARTISTS', 60, currentY + 50);
+
+            const artSize = 280;
+            const gap = 40;
+            const startListY = currentY + 240;
+
+            for (let i = 0; i < Math.min(data.artists.length, 6); i++) {
+                const item = data.artists[i];
+                const r = Math.floor(i / 3);
+                const c = i % 3;
+                
+                const centerX = 180 + c * (artSize + gap);
+                const centerY = startListY + r * (artSize + 110);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, artSize / 2, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
+
+                try {
+                    if (item.artist_image) {
+                        const img = await loadImage(item.artist_image);
+                        ctx.drawImage(img, centerX - artSize/2, centerY - artSize/2, artSize, artSize);
+                    } else { throw new Error(); }
+                } catch (e) {
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(centerX - artSize/2, centerY - artSize/2, artSize, artSize);
+                    ctx.fillStyle = '#555';
+                    ctx.font = 'bold 100px Sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(item.artist.charAt(0), centerX, centerY + 30);
+                }
+                ctx.restore();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Sans-serif';
+                ctx.textAlign = 'center';
+                let name = item.artist;
+                if (name.length > 18) name = name.substring(0, 16) + '...';
+                ctx.fillText(name, centerX, centerY + (artSize/2) + 40);
+                
+                ctx.fillStyle = '#aaa';
+                ctx.font = '20px Sans-serif';
+                ctx.fillText(`${item.play_count} plays`, centerX, centerY + (artSize/2) + 70);
+            }
+            currentY += 900;
+        }
+
+        if (selectedTypes.includes('tracks') && data.tracks.length > 0) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 50px Sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('TOP TRACKS', 60, currentY + 50);
+
+            let listY = currentY + 120;
+            const itemHeight = 160;
+
+            for (let i = 0; i < data.tracks.length; i++) {
+                const item = data.tracks[i];
+                
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(50, listY, width - 100, itemHeight - 20);
+
+                ctx.fillStyle = '#00e054';
+                ctx.font = 'bold 50px Sans-serif';
+                ctx.textAlign = 'center';
+
+                ctx.fillText(`#${i+1}`, 100, listY + 85);
+
+                if(item.album_image) {
+                    try {
+                        const img = await loadImage(item.album_image);
+                        ctx.drawImage(img, 180, listY + 10, 120, 120);
+                    } catch(e) {}
+                } else {
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(180, listY + 10, 120, 120);
+                }
+
+                ctx.textAlign = 'left';
+                const textStartX = 340;
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 35px Sans-serif';
+                let trackName = item.track;
+                if (trackName.length > 25) trackName = trackName.substring(0, 25) + '...';
+                ctx.fillText(trackName, textStartX, listY + 60);
+
+                ctx.fillStyle = '#aaa';
+                ctx.font = '28px Sans-serif';
+                ctx.fillText(item.artist, textStartX, listY + 100);
+
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 30px Sans-serif';
+                ctx.fillText(`${item.play_count}`, width - 80, listY + 85);
+                
+                listY += itemHeight;
+            }
+            currentY += 950;
+        }
+
+        ctx.fillStyle = '#555';
+        ctx.font = '30px Sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Generated by YourLastFM', width / 2, totalHeight - 40);
+
+        const buffer = canvas.toBuffer('image/png');
+        res.set('Content-Type', 'image/png');
+        res.send(buffer);
+
+    } catch (error) {
+        console.error("Generate error:", error);
+        res.status(500).json({ error: "Server error generating image" });
+    }
 });
 
 app.listen(PORT, () => {

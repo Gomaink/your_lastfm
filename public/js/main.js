@@ -6,13 +6,14 @@ import { loadTopSongs } from "./topSongs.js";
 import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
 import { LoadExportCSV, LoadImportCSV } from "./csv.js";
+import { initSharePage } from './share.js';
 
 const UI = {
   loading: document.getElementById("global-loading"),
-  scrobblesView: document.getElementById("scrobbles-view"),
-  dashboardSections: Array.from(document.querySelectorAll("main > section"))
-    .filter(sec => sec.id !== "scrobbles-view"),
-  sidebarButtons: document.querySelectorAll(".sidebar-link")
+  sections: document.querySelectorAll("main > section"),
+  sidebarButtons: document.querySelectorAll(".sidebar-link"),
+  sidebar: document.querySelector(".sidebar"),
+  sidebarOverlay: document.getElementById("sidebar-overlay")
 };
 
 const CHART_DAILY_CONFIG = {
@@ -23,8 +24,10 @@ const CHART_DAILY_CONFIG = {
   label: "Plays per day"
 };
 
+
 LoadExportCSV();
 LoadImportCSV();
+
 
 async function reloadDashboardData() {
   UI.loading.style.display = "flex";
@@ -44,40 +47,74 @@ async function reloadDashboardData() {
   }
 }
 
+
 function closeSidebarOnMobile() {
   if (window.innerWidth <= 768) {
-    document.querySelector(".sidebar")?.classList.remove("open");
-    document.getElementById("sidebar-overlay")?.classList.remove("active");
+    UI.sidebar?.classList.remove("open");
+    UI.sidebarOverlay?.classList.remove("active");
   }
 }
 
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 768) {
+    UI.sidebar?.classList.remove("open");
+    UI.sidebarOverlay?.classList.remove("active");
+  }
+});
+
+
 function toggleView(viewName) {
-  const isScrobbles = viewName === "scrobbles";
 
   UI.sidebarButtons.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
 
-  UI.scrobblesView.classList.toggle("d-none", !isScrobbles);
-  UI.dashboardSections.forEach(sec =>
-    sec.classList.toggle("d-none", isScrobbles)
-  );
+  UI.sections.forEach(section => {
+    section.classList.toggle(
+      "d-none",
+      section.id !== `${viewName}-view`
+    );
+  });
 
-  if (isScrobbles) {
-    loadScrobbles(true);
+  switch (viewName) {
+    case "dashboard":
+      reloadDashboardData();
+      break;
+
+    case "scrobbles":
+      loadScrobbles(true);
+      break;
+
+    case "friends":
+      window.loadFriends?.();
+      break;
+
+    case "share":
+      window.initShare?.();
+      break;
+
+    case "account":
+      window.loadAccount?.();
+      break;
   }
 
   closeSidebarOnMobile();
 }
 
-
 UI.sidebarButtons.forEach(btn => {
-  btn.addEventListener("click", () => toggleView(btn.dataset.view));
+  btn.addEventListener("click", () => {
+    toggleView(btn.dataset.view);
+  });
 });
 
 initFilters(() => {
-  reloadDashboardData();
+  const dashboardVisible = !document
+    .getElementById("dashboard-view")
+    ?.classList.contains("d-none");
+
+  if (dashboardVisible) {
+    reloadDashboardData();
+  }
 });
 
-toggleView("dashboard");
-reloadDashboardData();
+document.addEventListener('DOMContentLoaded', () => { toggleView("dashboard"); initSharePage(); })

@@ -528,7 +528,6 @@ strong {
   transition: opacity .25s ease;
 }
 
-/* Sidebar mobile */
 @media (max-width: 768px) {
 
   .mobile-menu-btn {
@@ -567,7 +566,7 @@ strong {
 }
 
 /* =========================
-   SCROBBLES RECENTES
+   SCROBBLES
 ========================= */
 .scrobble-item {
   display: flex;
@@ -753,4 +752,14 @@ strong {
   align-items: center;
   justify-content: center;
   font-size: 12px;
+}
+
+.form-check-input:checked {
+  background-color: var(--brand-green) !important;
+  border-color: var(--brand-green) !important;
+}
+
+.bg-black {
+  background-color: #121212 !important;
+  color: #b3b3b3 !important;
 }
