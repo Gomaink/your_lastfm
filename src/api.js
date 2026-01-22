@@ -367,7 +367,8 @@ app.get('/api/generate-share', async (req, res) => {
             
             ctx.fillStyle = '#ff7302';
             ctx.fillText(recapTitle.toUpperCase(), width / 2, isStory ? 220 : 100);
-            ctx.fillStyle = '#ff7302';
+
+            ctx.fillStyle = '#fff';
             ctx.font = 'bold 40px Sans-serif';
             ctx.fillText(periodText, width / 2, 170);
         }
