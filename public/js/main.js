@@ -6,7 +6,7 @@ import { loadTopSongs } from "./topSongs.js";
 import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
 import { LoadExportCSV, LoadImportCSV } from "./csv.js";
-import { initSharePage } from './share.js';
+import { initSharePage } from "./share.js";
 
 const UI = {
   loading: document.getElementById("global-loading"),
@@ -24,10 +24,8 @@ const CHART_DAILY_CONFIG = {
   label: "Plays per day"
 };
 
-
 LoadExportCSV();
 LoadImportCSV();
-
 
 async function reloadDashboardData() {
   UI.loading.style.display = "flex";
@@ -47,7 +45,6 @@ async function reloadDashboardData() {
   }
 }
 
-
 function closeSidebarOnMobile() {
   if (window.innerWidth <= 768) {
     UI.sidebar?.classList.remove("open");
@@ -62,8 +59,8 @@ window.addEventListener("resize", () => {
   }
 });
 
-
 function toggleView(viewName) {
+  localStorage.setItem("activeView", viewName);
 
   UI.sidebarButtons.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
@@ -117,4 +114,9 @@ initFilters(() => {
   }
 });
 
-document.addEventListener('DOMContentLoaded', () => { toggleView("dashboard"); initSharePage(); })
+document.addEventListener("DOMContentLoaded", () => {
+  initSharePage();
+
+  const savedView = localStorage.getItem("activeView") || "dashboard";
+  toggleView(savedView);
+});
