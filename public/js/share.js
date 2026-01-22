@@ -10,13 +10,16 @@ export function initSharePage() {
     btnGenerate.addEventListener('click', async () => {
         const period = document.getElementById('share-period').value;
         
+        const formatElement = document.querySelector('input[name="format-option"]:checked');
+        const format = formatElement ? formatElement.value : 'standard';
+
         const types = [];
         if(document.getElementById('check-albums').checked) types.push('albums');
         if(document.getElementById('check-artists').checked) types.push('artists');
         if(document.getElementById('check-tracks').checked) types.push('tracks');
 
         if(types.length === 0) {
-            alert("Please select at least one item to display (Albums, Artists or Tracks).");
+            alert("Please select at least one item to display.");
             return;
         }
 
@@ -29,7 +32,8 @@ export function initSharePage() {
         try {
             const queryParams = new URLSearchParams({
                 period: period,
-                types: types.join(',')
+                types: types.join(','),
+                format: format
             });
 
             const response = await fetch(`/api/generate-share?${queryParams}`);
@@ -46,7 +50,7 @@ export function initSharePage() {
             shareResult.classList.remove('d-none');
             
             btnDownload.href = imageUrl;
-            btnDownload.download = `my-music-${period}.png`;
+            btnDownload.download = `my-music-${period}-${format}.png`;
             btnDownload.classList.remove('d-none');
 
         } catch (error) {

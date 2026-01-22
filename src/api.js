@@ -17,6 +17,7 @@ const { ensureArtistImage } = require("./services/artistImageCache");
 const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 const { ensureTrackDuration } = require("./services/trackDurationCache");
+const { getLastFmUsername } = require("./services/lastfm-username");
 const { fetchWithRetry } = require("./utils/fetchRetry");
 const { sanitizeError } = require("./utils/sanitizeAxios");
 
@@ -265,11 +266,16 @@ app.get("/api/export/scrobbles", (req, res) => {
 
 app.get('/api/generate-share', async (req, res) => {
     try {
-        const { period, types } = req.query; 
+        const { period, types, format } = req.query;
         const selectedTypes = types ? types.split(',') : ['albums'];
-        
+        const isStory = format === 'story';
+
+        const username = await getLastFmUsername();
+        const recapTitle = `${username} RECAP`;
+
         const now = Math.floor(Date.now() / 1000);
         let start = 0;
+        
         switch (period) {
             case '7day': start = now - (7 * 24 * 60 * 60); break;
             case '30day': start = now - (30 * 24 * 60 * 60); break;
@@ -280,96 +286,182 @@ app.get('/api/generate-share', async (req, res) => {
             default: start = now - (7 * 24 * 60 * 60);
         }
 
+        const limits = isStory 
+            ? { albums: 3, artists: 3, tracks: 4 } 
+            : { albums: 9, artists: 6, tracks: 5 };
+
         const data = {};
         if (selectedTypes.includes('albums')) {
-            data.albums = db.prepare(`SELECT album, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? AND album_image IS NOT NULL AND album_image != '' GROUP BY album, artist ORDER BY play_count DESC LIMIT 9`).all(start);
+            data.albums = db.prepare(`SELECT album, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? AND album_image IS NOT NULL AND album_image != '' GROUP BY album, artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.albums);
         }
         if (selectedTypes.includes('artists')) {
-            data.artists = db.prepare(`SELECT s.artist, a.artist_image, COUNT(*) as play_count FROM scrobbles s LEFT JOIN artists a ON s.artist = a.artist WHERE s.played_at > ? GROUP BY s.artist ORDER BY play_count DESC LIMIT 6`).all(start);
+            data.artists = db.prepare(`SELECT s.artist, a.artist_image, COUNT(*) as play_count FROM scrobbles s LEFT JOIN artists a ON s.artist = a.artist WHERE s.played_at > ? GROUP BY s.artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.artists);
         }
         if (selectedTypes.includes('tracks')) {
-            data.tracks = db.prepare(`SELECT track, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? GROUP BY track, artist ORDER BY play_count DESC LIMIT 5`).all(start);
+            data.tracks = db.prepare(`SELECT track, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? GROUP BY track, artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.tracks);
         }
 
         if (!data.albums?.length && !data.artists?.length && !data.tracks?.length) {
             return res.status(400).json({ error: "No data found." });
         }
 
-        const width = 1080;
-        const headerHeight = 250;
-        const footerHeight = 100;
-        
-        let totalHeight = headerHeight + footerHeight;
-        if (selectedTypes.includes('albums') && data.albums.length > 0) totalHeight += 1150;
-        if (selectedTypes.includes('artists') && data.artists.length > 0) totalHeight += 900;
-        if (selectedTypes.includes('tracks') && data.tracks.length > 0) totalHeight += 950;
+        let width, height;
+        if (isStory) {
+            width = 1080;
+            height = 1920;
+        } else {
+            width = 1080;
+            const headerHeight = 250;
+            const footerHeight = 100;
+            let totalHeight = headerHeight + footerHeight;
+            if (selectedTypes.includes('albums') && data.albums?.length) totalHeight += 1150;
+            if (selectedTypes.includes('artists') && data.artists?.length) totalHeight += 900;
+            if (selectedTypes.includes('tracks') && data.tracks?.length) totalHeight += 950;
+            height = totalHeight;
+        }
 
-        const canvas = createCanvas(width, totalHeight);
+        const canvas = createCanvas(width, height);
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = '#121212';
-        ctx.fillRect(0, 0, width, totalHeight);
+        if (isStory) {
+            const grd = ctx.createLinearGradient(0, 0, 0, height);
+            grd.addColorStop(0, '#2b2b2b'); 
+            grd.addColorStop(1, '#000000');
+            ctx.fillStyle = grd;
+        } else {
+            ctx.fillStyle = '#121212';
+        }
+        ctx.fillRect(0, 0, width, height);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 70px Sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`MY MUSIC RECAP`, width / 2, 100);
-
-        ctx.fillStyle = '#00e054';
+        
         let periodText = period === 'all' ? 'ALL TIME' : period.toUpperCase().replace('DAY', ' DAYS').replace('MONTH', ' MONTHS');
-        ctx.font = 'bold 40px Sans-serif';
-        ctx.fillText(periodText, width / 2, 170);
+        
+        const maxWidth = width - 120;
+        let fontSize = isStory ? 60 : 70;
 
-        let currentY = headerHeight;
-
-        if (selectedTypes.includes('albums') && data.albums.length > 0) {
+        if (isStory) {
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 50px Sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('TOP ALBUMS', 60, currentY + 50);
+            do {
+              ctx.font = `bold ${fontSize}px Sans-serif`;
+              fontSize -= 2;
+            } while (ctx.measureText(recapTitle).width > maxWidth && fontSize > 36);
+
+            ctx.fillText(recapTitle.toUpperCase(), width / 2, isStory ? 220 : 100);
             
-            const gridSize = 300;
+            const textWidth = ctx.measureText(periodText).width;
+            ctx.fillStyle = '#ff7302';
+            ctx.beginPath();
+            ctx.roundRect((width/2) - (textWidth/2) - 20, 260, textWidth + 40, 60, 30);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 35px Sans-serif';
+            ctx.fillText(periodText, width / 2, 303);
+        } else {
+            do {
+              ctx.font = `bold ${fontSize}px Sans-serif`;
+              fontSize -= 2;
+            } while (ctx.measureText(recapTitle).width > maxWidth && fontSize > 36);
+            
+            ctx.fillStyle = '#ff7302';
+            ctx.fillText(recapTitle.toUpperCase(), width / 2, isStory ? 220 : 100);
+            ctx.fillStyle = '#ff7302';
+            ctx.font = 'bold 40px Sans-serif';
+            ctx.fillText(periodText, width / 2, 170);
+        }
+
+        
+        let currentY = isStory ? 400 : 250;
+        const spacingStory = 80;
+
+        if (data.albums && data.albums.length > 0) {
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 45px Sans-serif';
+            
+            if(isStory) {
+                ctx.fillStyle = '#ff7302';
+                ctx.fillRect(60, currentY + 10, 10, 40); 
+                ctx.fillStyle = '#fff';
+                ctx.fillText('TOP ALBUMS', 100, currentY + 45);
+            } else {
+                ctx.fillText('TOP ALBUMS', 60, currentY + 50);
+            }
+
+            const gridSize = isStory ? 280 : 300;
             const gap = 30;
-            const startX = (width - ((3 * gridSize) + (2 * gap))) / 2;
-            const gridY = currentY + 100;
+            const cols = 3; 
+            const startX = (width - ((cols * gridSize) + ((cols-1) * gap))) / 2;
+            const gridY = currentY + (isStory ? 80 : 100);
 
             for (let i = 0; i < data.albums.length; i++) {
                 const item = data.albums[i];
-                const r = Math.floor(i / 3);
-                const c = i % 3;
+                const r = Math.floor(i / cols);
+                const c = i % cols;
                 const x = startX + c * (gridSize + gap);
                 const y = gridY + r * (gridSize + gap);
 
                 try {
                     const img = await loadImage(item.album_image);
                     ctx.drawImage(img, x, y, gridSize, gridSize);
-                    ctx.strokeStyle = '#222';
+                    ctx.strokeStyle = isStory ? 'rgba(255,255,255,0.2)' : '#222';
+                    ctx.lineWidth = isStory ? 2 : 1;
                     ctx.strokeRect(x, y, gridSize, gridSize);
+                    
+                    if(isStory) {
+                        ctx.fillStyle = '#ff7302';
+                        ctx.fillRect(x, y, 50, 50);
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 30px Sans-serif';
+                        ctx.textAlign = 'center'; 
+                        ctx.fillText(`${i+1}`, x + 25, y + 37);
+                        ctx.textAlign = 'left';
+                    }
                 } catch(e) {
                     ctx.fillStyle = '#333';
                     ctx.fillRect(x, y, gridSize, gridSize);
                 }
             }
-            currentY += 1150; 
+            
+            if (isStory) {
+                const rows = Math.ceil(data.albums.length / 3);
+                currentY += (rows * (gridSize + gap)) + spacingStory + 50; 
+            } else {
+                currentY += 1150;
+            }
         }
 
-        if (selectedTypes.includes('artists') && data.artists.length > 0) {
+        if (data.artists && data.artists.length > 0) {
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 50px Sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText('TOP ARTISTS', 60, currentY + 50);
+            ctx.font = 'bold 45px Sans-serif';
+            
+            if(isStory) {
+                ctx.fillStyle = '#ff7302';
+                ctx.fillRect(60, currentY + 10, 10, 40);
+                ctx.fillStyle = '#fff';
+                ctx.fillText('TOP ARTISTS', 100, currentY + 45);
+            } else {
+                ctx.fillText('TOP ARTISTS', 60, currentY + 50);
+            }
 
-            const artSize = 280;
-            const gap = 40;
+            const artSize = isStory ? 220 : 280;
+            const gap = isStory ? 60 : 40;
             const startListY = currentY + 240;
+            const maxCols = 3;
 
-            for (let i = 0; i < Math.min(data.artists.length, 6); i++) {
+            for (let i = 0; i < data.artists.length; i++) {
                 const item = data.artists[i];
-                const r = Math.floor(i / 3);
-                const c = i % 3;
+                const r = Math.floor(i / maxCols);
+                const c = i % maxCols;
                 
-                const centerX = 180 + c * (artSize + gap);
-                const centerY = startListY + r * (artSize + 110);
+                const totalRowWidth = (Math.min(data.artists.length, maxCols) * artSize) + ((Math.min(data.artists.length, maxCols)-1) * gap);
+                const startRowX = (width - totalRowWidth) / 2 + (artSize/2);
+
+                const centerX = startRowX + c * (artSize + gap);
+                const centerY = startListY + r * (artSize + (isStory ? 90 : 110)) - (isStory ? 50 : 0);
 
                 ctx.save();
                 ctx.beginPath();
@@ -385,85 +477,114 @@ app.get('/api/generate-share', async (req, res) => {
                 } catch (e) {
                     ctx.fillStyle = '#333';
                     ctx.fillRect(centerX - artSize/2, centerY - artSize/2, artSize, artSize);
-                    ctx.fillStyle = '#555';
-                    ctx.font = 'bold 100px Sans-serif';
+                    ctx.fillStyle = '#fff';
                     ctx.textAlign = 'center';
+                    ctx.font = 'bold 80px Sans-serif';
                     ctx.fillText(item.artist.charAt(0), centerX, centerY + 30);
                 }
                 ctx.restore();
 
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 24px Sans-serif';
+                ctx.font = isStory ? 'bold 22px Sans-serif' : 'bold 24px Sans-serif';
                 ctx.textAlign = 'center';
                 let name = item.artist;
                 if (name.length > 18) name = name.substring(0, 16) + '...';
-                ctx.fillText(name, centerX, centerY + (artSize/2) + 40);
+                ctx.fillText(name, centerX, centerY + (artSize/2) + 35);
                 
                 ctx.fillStyle = '#aaa';
-                ctx.font = '20px Sans-serif';
-                ctx.fillText(`${item.play_count} plays`, centerX, centerY + (artSize/2) + 70);
+                ctx.font = isStory ? '18px Sans-serif' : '20px Sans-serif';
+                ctx.fillText(`${item.play_count} plays`, centerX, centerY + (artSize/2) + 60);
+                
+                ctx.textAlign = 'left';
             }
-            currentY += 900;
+
+            if(isStory) {
+                currentY += artSize + 150 + spacingStory;
+            } else {
+                currentY += 900;
+            }
         }
 
-        if (selectedTypes.includes('tracks') && data.tracks.length > 0) {
+        if (data.tracks && data.tracks.length > 0) {
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 50px Sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText('TOP TRACKS', 60, currentY + 50);
+            ctx.font = 'bold 45px Sans-serif';
 
-            let listY = currentY + 120;
-            const itemHeight = 160;
+            if(isStory) {
+                ctx.fillStyle = '#ff7302';
+                ctx.fillRect(60, currentY + 10, 10, 40);
+                ctx.fillStyle = '#fff';
+                ctx.fillText('TOP TRACKS', 100, currentY + 45);
+            } else {
+                ctx.fillText('TOP TRACKS', 60, currentY + 50);
+            }
+
+            let listY = currentY + (isStory ? 80 : 120);
+            const itemHeight = isStory ? 130 : 160;
 
             for (let i = 0; i < data.tracks.length; i++) {
                 const item = data.tracks[i];
                 
-                ctx.fillStyle = '#1a1a1a';
-                ctx.fillRect(50, listY, width - 100, itemHeight - 20);
+                if(isStory) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                    ctx.beginPath();
+                    ctx.roundRect(50, listY, width - 100, itemHeight - 15, 15);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fillRect(50, listY, width - 100, itemHeight - 20);
+                }
 
-                ctx.fillStyle = '#00e054';
-                ctx.font = 'bold 50px Sans-serif';
+                ctx.fillStyle = '#ff7302';
+                ctx.font = 'bold 40px Sans-serif';
                 ctx.textAlign = 'center';
+                ctx.fillText(`#${i+1}`, 100, listY + (isStory ? 75 : 85));
 
-                ctx.fillText(`#${i+1}`, 100, listY + 85);
+                const imgSize = isStory ? 90 : 120;
+                const imgY = listY + (isStory ? 12 : 10);
+                const imgX = 160;
 
                 if(item.album_image) {
                     try {
                         const img = await loadImage(item.album_image);
-                        ctx.drawImage(img, 180, listY + 10, 120, 120);
+                        ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
                     } catch(e) {}
                 } else {
                     ctx.fillStyle = '#333';
-                    ctx.fillRect(180, listY + 10, 120, 120);
+                    ctx.fillRect(imgX, imgY, imgSize, imgSize);
                 }
 
                 ctx.textAlign = 'left';
-                const textStartX = 340;
+                const textStartX = isStory ? 280 : 340;
 
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 35px Sans-serif';
+                ctx.font = isStory ? 'bold 30px Sans-serif' : 'bold 35px Sans-serif';
                 let trackName = item.track;
-                if (trackName.length > 25) trackName = trackName.substring(0, 25) + '...';
-                ctx.fillText(trackName, textStartX, listY + 60);
+                const maxLen = isStory ? 22 : 25;
+                if (trackName.length > maxLen) trackName = trackName.substring(0, maxLen) + '...';
+                ctx.fillText(trackName, textStartX, listY + (isStory ? 50 : 60));
 
                 ctx.fillStyle = '#aaa';
-                ctx.font = '28px Sans-serif';
-                ctx.fillText(item.artist, textStartX, listY + 100);
+                ctx.font = isStory ? '24px Sans-serif' : '28px Sans-serif';
+                let artistName = item.artist;
+                if(isStory && artistName.length > 25) artistName = artistName.substring(0, 25) + '...';
+                ctx.fillText(artistName, textStartX, listY + (isStory ? 85 : 100));
 
                 ctx.textAlign = 'right';
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 30px Sans-serif';
-                ctx.fillText(`${item.play_count}`, width - 80, listY + 85);
+                ctx.fillStyle = isStory ? '#ddd' : '#fff';
+                ctx.font = 'bold 26px Sans-serif';
+                ctx.fillText(`${item.play_count} scrobbles`, width - 80, listY + (isStory ? 75 : 85));
                 
                 listY += itemHeight;
             }
-            currentY += 950;
+            if (!isStory) currentY += 950;
         }
 
-        ctx.fillStyle = '#555';
-        ctx.font = '30px Sans-serif';
+        ctx.fillStyle = isStory ? 'rgba(255,255,255,0.5)' : '#555';
+        ctx.font = '24px Sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Generated by YourLastFM', width / 2, totalHeight - 40);
+        const footerY = isStory ? height - 80 : height - 40;
+        ctx.fillText('Generated by YourLastFM', width / 2, footerY);
 
         const buffer = canvas.toBuffer('image/png');
         res.set('Content-Type', 'image/png');
