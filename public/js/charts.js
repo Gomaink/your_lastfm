@@ -22,7 +22,7 @@ export async function loadChart({ url, canvasId, labelKey, valueKey, label }) {
         datasets: [{
             label,
             data: data.map(d => d[valueKey]),
-            backgroundColor: "#1DB954",
+            backgroundColor: "#ff7302",
             borderRadius: 6,
             maxBarThickness: 50
           }]

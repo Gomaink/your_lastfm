@@ -13,8 +13,8 @@
   --text-muted: #777777;
   --text-rank: #666666;
   
-  --brand-green: #1db954;
-  --brand-green-alpha: rgba(29, 185, 84, 0.25);
+  --brand-orange: #ff7302;
+  --brand-orange-alpha: rgba(255, 115, 2, 0.25);
   --shadow-standard: 0 8px 24px rgba(0, 0, 0, 0.4);
   
   /* Spacing & Radius */
@@ -80,7 +80,7 @@ canvas {
 }
 
 .text-green {
-  color: var(--brand-green) !important;
+  color: var(--brand-orange) !important;
 }
 
 .mdi {
@@ -142,13 +142,13 @@ canvas {
 }
 
 .filter-select:hover {
-  border-color: var(--brand-green);
+  border-color: var(--brand-orange);
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: var(--brand-green);
-  box-shadow: 0 0 0 2px var(--brand-green-alpha);
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 2px var(--brand-orange-alpha);
 }
 
 /* =========================
@@ -172,14 +172,14 @@ canvas {
 }
 
 .range-pill:hover {
-  border-color: var(--brand-green);
+  border-color: var(--brand-orange);
   color: var(--text-primary);
 }
 
 .range-pill.active {
-  background: var(--brand-green);
+  background: var(--brand-orange);
   color: #000000;
-  border-color: var(--brand-green);
+  border-color: var(--brand-orange);
   font-weight: 600;
 }
 
@@ -490,14 +490,14 @@ strong {
 }
 
 .sidebar-link:hover {
-  background: rgba(29, 185, 84, 0.08);
+  background: rgba(255, 115, 2, 0.08);
   color: var(--text-primary);
 }
 
 .sidebar-link.active {
   background: #121212;
   border: 1px solid #2a2a2a;
-  color: rgba(29, 185, 84, 0.8);
+  color: rgba(255, 115, 2, 0.8);
   font-weight: 600;
 }
 
@@ -755,11 +755,21 @@ strong {
 }
 
 .form-check-input:checked {
-  background-color: var(--brand-green) !important;
-  border-color: var(--brand-green) !important;
+  background-color: var(--brand-orange) !important;
+  border-color: var(--brand-orange) !important;
 }
 
 .bg-black {
   background-color: #121212 !important;
   color: #b3b3b3 !important;
+}
+
+.btn-success {
+  background-color: rgba(255, 115, 2, 0.25) !important;
+  border-color: var(--brand-orange) !important;
+}
+
+.btn-success:hover {
+  background-color: var(--brand-orange) !important;
+  border-color: var(--brand-orange) !important;
 }
