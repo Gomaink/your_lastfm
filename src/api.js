@@ -17,7 +17,7 @@ const { ensureArtistImage } = require("./services/artistImageCache");
 const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 const { ensureTrackDuration } = require("./services/trackDurationCache");
-const { getLastFmUsername } = require("./services/lastfm-username");
+const { getLastFmUserInfo } = require("./services/lastfm-username");
 const { fetchWithRetry } = require("./utils/fetchRetry");
 const { sanitizeError } = require("./utils/sanitizeAxios");
 
@@ -264,14 +264,40 @@ app.get("/api/export/scrobbles", (req, res) => {
   exportScrobbleCSV(res);
 });
 
+app.get('/api/user-stats', async (req, res) => {
+    try {
+        const lastFmData = await getLastFmUserInfo();
+
+        const totalScrobbles = db.prepare('SELECT COUNT(*) as count FROM scrobbles').get().count;
+        const uniqueArtists = db.prepare('SELECT COUNT(DISTINCT artist) as count FROM scrobbles').get().count;
+        const uniqueAlbums = db.prepare('SELECT COUNT(DISTINCT album) as count FROM scrobbles').get().count;
+        const uniqueTracks = db.prepare('SELECT COUNT(DISTINCT track) as count FROM scrobbles').get().count;
+        const firstScrobble = db.prepare('SELECT MIN(played_at) as first_date FROM scrobbles').get().first_date;
+
+        res.json({
+            username: lastFmData.name,
+            avatar: lastFmData.avatar,
+            totalScrobbles,
+            uniqueArtists,
+            uniqueAlbums,
+            uniqueTracks,
+            joinedDate: firstScrobble
+        });
+
+    } catch (error) {
+        console.error("Error searching stats:", error);
+        res.status(500).json({ error: "Error loading stats" });
+    }
+});
+
 app.get('/api/generate-share', async (req, res) => {
     try {
         const { period, types, format } = req.query;
         const selectedTypes = types ? types.split(',') : ['albums'];
         const isStory = format === 'story';
 
-        const username = await getLastFmUsername();
-        const recapTitle = `${username} RECAP`;
+        const username = await getLastFmUserInfo();
+        const recapTitle = `${username.name} RECAP`;
 
         const now = Math.floor(Date.now() / 1000);
         let start = 0;
