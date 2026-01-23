@@ -311,6 +311,70 @@
                         </div>
                     </div>
                 </section>
+                <section id="account-view" class="d-none mt-4">
+                    <div class="profile-card">
+                        <div class="profile-header">
+                            <div class="profile-avatar">
+                                <img src="https://www.last.fm/static/images/defaults/player_default_artist.43043d554d46.png" alt="Avatar">
+                            </div>
+                            <div class="profile-info">
+                                <h3 id="profile-username">Loading...</h3>
+                                </div>
+                        </div>
+
+                        <div class="profile-main-stats">
+                            <div class="scrobble-count-area">
+                                <span id="profile-total-scrobbles" class="big-number">0</span>
+                                <span class="label">Scrobbles</span>
+                            </div>
+                            <div class="joined-date">
+                                Joined <span id="profile-joined-date">-- --- ----</span>
+                            </div>
+                        </div>
+
+                        <hr class="profile-divider">
+
+                        <div class="profile-grid-stats">
+                            <div class="stat-item">
+                                <span class="stat-icon">⭐</span>
+                                <div class="stat-text">
+                                    <span id="profile-artists" class="stat-value">0</span>
+                                    <span class="stat-label">Artists</span>
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">◎</span>
+                                <div class="stat-text">
+                                    <span id="profile-albums" class="stat-value">0</span>
+                                    <span class="stat-label">Albums</span>
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">♪</span>
+                                <div class="stat-text">
+                                    <span id="profile-tracks" class="stat-value">0</span>
+                                    <span class="stat-label">Tracks</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="data-management">
+                        <h3>Data & Privacy</h3>
+                        <div class="data-buttons">
+                            <button id="btn-export-csv" class="data-btn export">
+                                <span class="icon">⬇</span> Export CSV
+                            </button>
+                            
+                            <button id="btn-import-trigger" class="data-btn import">
+                                <span class="icon">⬆</span> Import CSV
+                            </button>
+                            <input type="file" id="csv-upload-input" accept=".csv" style="display: none;">
+                        </div>
+                        <p class="data-note">Importing may take a while depending on file size.</p>
+                    </div>
+
+                </section>
             </main>
         </div>
 

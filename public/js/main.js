@@ -5,7 +5,7 @@ import { loadChart } from "./charts.js";
 import { loadTopSongs } from "./topSongs.js";
 import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
-import { LoadExportCSV, LoadImportCSV } from "./csv.js";
+import { loadAccount } from "./account.js";
 import { initSharePage } from "./share.js";
 
 const UI = {
@@ -23,9 +23,6 @@ const CHART_DAILY_CONFIG = {
   valueKey: "plays",
   label: "Plays per day"
 };
-
-LoadExportCSV();
-LoadImportCSV();
 
 async function reloadDashboardData() {
   UI.loading.style.display = "flex";
@@ -87,11 +84,11 @@ function toggleView(viewName) {
       break;
 
     case "share":
-      window.initShare?.();
+      initSharePage();
       break;
 
     case "account":
-      window.loadAccount?.();
+      loadAccount();
       break;
   }
 
