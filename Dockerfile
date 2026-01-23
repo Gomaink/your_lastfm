@@ -1,5 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 FROM node:22-slim
+=======
+FROM node:24-slim
+>>>>>>> 152234604afd154e57935834d24c11c2b4921c14
 =======
 FROM node:24-slim
 >>>>>>> 152234604afd154e57935834d24c11c2b4921c14
