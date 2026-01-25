@@ -315,7 +315,7 @@
                     <div class="profile-card">
                         <div class="profile-header">
                             <div class="profile-avatar">
-                                <img src="https://www.last.fm/static/images/defaults/player_default_artist.43043d554d46.png" alt="Avatar">
+                                <img src="/images/artist-placeholder.png" alt="Avatar">
                             </div>
                             <div class="profile-info">
                                 <h3 id="profile-username">Loading...</h3>
@@ -375,6 +375,17 @@
                     </div>
 
                 </section>
+                
+                <div id="global-loading-friends" style="display: none">
+                    <div class="spinner-border text-light" role="status"></div>
+                </div>
+
+                <section id="friends-view" class="view-section d-none">
+                    <div style="display: flex; justify-content: center; padding-top: 50px;">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </section>
+
             </main>
         </div>
 

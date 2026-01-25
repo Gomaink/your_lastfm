@@ -7,6 +7,7 @@ import { loadTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
 import { loadAccount } from "./account.js";
 import { initSharePage } from "./share.js";
+import { loadFriends } from "./friends.js";
 
 const UI = {
   loading: document.getElementById("global-loading"),
@@ -80,7 +81,7 @@ function toggleView(viewName) {
       break;
 
     case "friends":
-      window.loadFriends?.();
+      loadFriends();
       break;
 
     case "share":

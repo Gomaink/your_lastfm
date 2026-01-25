@@ -653,6 +653,17 @@ strong {
   z-index: 9999;
 }
 
+#global-loading-friends {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+
 /* =========================
    RESPONSIVE FILTER BAR
 ========================= */
@@ -924,3 +935,312 @@ strong {
     margin-top: 10px;
     text-align: center;
 }
+
+/* =========================
+   FRIENDS PAGE
+========================= */
+.friends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    padding-bottom: 20px;
+}
+
+.friend-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    border: 1px solid transparent;
+}
+
+.friend-card:hover {
+    transform: translateY(-4px);
+    background: #222;
+    border-color: var(--brand-orange);
+}
+
+.friend-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 12px;
+    border: 2px solid var(--bg-border);
+}
+
+.friend-info strong {
+    display: block;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.friend-info small {
+    color: var(--text-muted);
+}
+
+/* =========================
+   COMPARISON VIEW
+========================= */
+.comparison-header h2 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+}
+
+.avatars-vs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    margin: 30px 0;
+    font-weight: 800;
+    font-size: 1.5rem;
+    color: var(--brand-orange);
+}
+
+.vs-avatar-container {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--brand-orange);
+    background: #222;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.vs-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.vs-avatar-initial {
+    font-size: 3rem;
+    color: #555;
+}
+
+
+.compatibility-result {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.compatibility-label {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+.compatibility-status {
+    font-size: 2.2rem;
+    font-weight: 800;
+}
+
+.comp-soulmates { color: #ff0055; text-shadow: 0 0 15px rgba(255, 0, 85, 0.4); }
+.comp-high { color: var(--brand-orange); text-shadow: 0 0 15px rgba(255, 115, 2, 0.4); }
+.comp-medium { color: #ffcc00; }
+.comp-low { color: var(--text-muted); }
+
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.comp-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    box-shadow: var(--shadow-standard);
+}
+
+.comp-card-icon {
+    font-size: 2rem;
+    color: var(--brand-orange);
+    margin-bottom: 10px;
+    opacity: 0.8;
+}
+
+.comp-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 15px;
+}
+
+.comp-card-values {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    font-weight: 700;
+    font-size: 1.3rem;
+    width: 100%;
+}
+
+.val-you { color: var(--text-primary); }
+.val-vs { color: var(--text-muted); font-size: 0.9rem; font-weight: 400;}
+.val-friend { color: var(--text-secondary); }
+
+
+.common-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--bg-border);
+}
+
+.common-img-container {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    background: #222;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.common-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.text-orange { color: var(--brand-orange); font-weight: 600; }
+
+.btn-back {
+    background: transparent;
+    border: 1px solid #444;
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-back:hover {
+    background: #333;
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+    .avatars-vs {
+        gap: 15px;
+    }
+    .vs-avatar-container {
+        width: 90px;
+        height: 90px;
+    }
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.col-md-4 {
+    display: flex; 
+    flex-direction: column;
+}
+
+.common-list-container {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 10px;
+    flex-grow: 1; 
+    height: 100%; 
+}
+
+.common-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.common-item:last-child {
+    border-bottom: none;
+}
+
+.common-img-container {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    background: #111;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.common-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.common-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.common-info strong {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.95rem;
+}
+
+.common-info small {
+    display: block;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.common-counts {
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+.super {
+  color: #f90053;
+}
+
+.high {
+  color: #ff8c1a;
+}
+
+.medium {
+  color: #ffc266;
+}
+
+.low {
+  color: #c07a2d;
+}
+
+.very-low {
+  color: #6b4a2b;
+} 

@@ -20,6 +20,7 @@ const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { getLastFmUserInfo } = require("./services/lastfm-username");
 const { fetchWithRetry } = require("./utils/fetchRetry");
 const { sanitizeError } = require("./utils/sanitizeAxios");
+const { getFriendsList, compareWithFriend } = require('./services/lastfm-friends');
 
 
 const app = express();
@@ -620,6 +621,27 @@ app.get('/api/generate-share', async (req, res) => {
     } catch (error) {
         console.error("Generate error:", error);
         res.status(500).json({ error: "Server error generating image" });
+    }
+});
+
+app.get('/api/friends', async (req, res) => {
+    try {
+        const friends = await getFriendsList();
+        res.json(friends);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error searching for friends' });
+    }
+});
+
+app.get('/api/friends/compare/:username', async (req, res) => {
+    try {
+        const friendUsername = req.params.username;
+        const comparison = await compareWithFriend(db, friendUsername);
+        res.json(comparison);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error comparing profiles' });
     }
 });
 
