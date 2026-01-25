@@ -15,6 +15,41 @@ A containerized Node.js application that synchronizes scrobbles from **Last.fm**
 
 The project is fully containerized with **Docker**, using an automated entrypoint to handle database initialization and sequential execution (Syncing first, then launching the Web API). It also utilizes **PM2** as a process manager inside the container to ensure the web service remains active and resilient.
 
+# Features
+### Interactive Web Dashboard
+
+- Clean, modern web interface to visualize your music activity.
+
+### Automatic Last.fm Scrobble Synchronization
+
+- Periodically fetches and stores your listening history (scrobbles) from Last.fm.
+- Ensures your data is always up to date without manual intervention.
+
+### Local Music History Database
+
+- Persists all scrobbles in a local SQLite database.
+- Allows fast queries and offline access to historical listening data.
+
+### Recent Scrobbles View
+
+- Displays your most recent tracks.
+- Smart image fallback logic for tracks, albums, and artists.
+
+### Friends Comparison (Compatibility View)
+
+- Compare your music taste with Last.fm friends.
+- Shows compatibility level (Very Low → Super).
+- Displays common top artists, albums, and tracks.
+- Calculates and normalizes compatibility based on real listening data.
+
+### Shareable Music Cards
+
+- Generate dynamic images based on your listening data.
+- Optimized layouts for:
+  - Feed posts
+  - Instagram Stories (9:16)
+- Built using node-canvas for server-side image rendering.
+
 ## Prerequisites
 
 * [Docker](https://docs.docker.com/get-docker/)
