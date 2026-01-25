@@ -15,7 +15,7 @@ A containerized Node.js application that synchronizes scrobbles from **Last.fm**
 
 The project is fully containerized with **Docker**, using an automated entrypoint to handle database initialization and sequential execution (Syncing first, then launching the Web API). It also utilizes **PM2** as a process manager inside the container to ensure the web service remains active and resilient.
 
-# Features
+## Features
 ### Interactive Web Dashboard
 
 - Clean, modern web interface to visualize your music activity.
