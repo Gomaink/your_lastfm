@@ -15,7 +15,7 @@ export async function loadTopArtists() {
       <span class="rank">${i + 1}</span>
 
       <img
-        src="${a.image || "/img/artist-placeholder.png"}"
+        src="${a.image || "/images/artist-placeholder.png"}"
         class="cover artist"
       />
 

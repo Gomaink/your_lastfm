@@ -26,7 +26,7 @@ export async function loadScrobbles(reset = true) {
         <div class="scrobble-cover">
           ${
             s.image
-              ? `<img src="${s.image}" alt="${s.track}" />`
+              ? `<img src="${s.image || "/images/artist-placeholder.png"}" alt="${s.track}" />`
               : `<div class="cover-placeholder"></div>`
           }
         </div>

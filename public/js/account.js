@@ -21,7 +21,7 @@ async function fetchAndRenderStats() {
 
         const avatarEl = document.querySelector('.profile-avatar img');
         if (avatarEl) {
-            const defaultAvatar = "https://www.last.fm/static/images/defaults/player_default_artist.43043d554d46.png";
+            const defaultAvatar = "/images/artist-placeholder.png";
             avatarEl.src = data.avatar || defaultAvatar;
         }
 
