@@ -19,7 +19,6 @@ COPY package*.json ./
 
 RUN npm install --production
 
-# Copia o restante do código
 COPY . .
 
 RUN chmod +x entrypoint.sh
