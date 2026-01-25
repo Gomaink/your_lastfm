@@ -45,9 +45,7 @@ The project is fully containerized with **Docker**, using an automated entrypoin
 ### Shareable Music Cards
 
 - Generate dynamic images based on your listening data.
-- Optimized layouts for:
-  - Feed posts
-  - Instagram Stories (9:16)
+- Optimized layouts for feed posts and instagram stories (9:16)
 - Built using node-canvas for server-side image rendering.
 
 ## Prerequisites
