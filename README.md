@@ -5,7 +5,7 @@
 
 A containerized Node.js application that synchronizes scrobbles from **Last.fm**, stores them in a local **SQLite** database, and serves a web dashboard.
 
-![](https://i.imgur.com/4oiHM9D.png)
+<img width="1718" height="1066" alt="image" src="https://github.com/user-attachments/assets/97d5a9f1-b39a-42ea-9acf-2b4546426a11" />
 
 ---
 
