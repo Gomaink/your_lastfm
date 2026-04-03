@@ -9,8 +9,13 @@ export async function loadTopSongs() {
   container.innerHTML = "";
 
   data.forEach((row, i) => {
-    const minutes = Math.floor(row.total_seconds / 60);
-    const seconds = row.total_seconds % 60;
+    const totalSec = row.total_seconds;
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    const seconds = totalSec % 60;
+    const time = hours > 0
+      ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+      : `${minutes}:${String(seconds).padStart(2, "0")}`;
 
     container.innerHTML += `
       <div class="top-song-row">
@@ -30,7 +35,7 @@ export async function loadTopSongs() {
         </div>
 
         <span>${row.plays}</span>
-        <span>${minutes}:${String(seconds).padStart(2, "0")}</span>
+        <span>${time}</span>
       </div>
     `;
   });
