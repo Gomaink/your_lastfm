@@ -7,9 +7,11 @@ const crypto = require("crypto");
 const fs = require("fs");
 const multer = require("multer");
 const { createCanvas, loadImage, registerFont } = require('canvas');
+const cron = require("node-cron");
 
 const db = require("./db");
 
+const { verifyIntegrity } = require('./integrity-check');
 const { getActiveFilter } = require("./utils/filters");
 const { fillMissingDates } = require("./utils/dateRange");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
@@ -31,6 +33,16 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_unique
+  ON scrobbles (
+      artist,
+      track,
+      album,
+      played_at
+  );
+`);
 
 app.get("/api/top-artists", async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -643,6 +655,10 @@ app.get('/api/friends/compare/:username', async (req, res) => {
         console.error(error);
         res.status(500).json({ error: 'Error comparing profiles' });
     }
+});
+
+cron.schedule('0 3 * * *', async () => {
+    await verifyIntegrity();
 });
 
 app.listen(PORT, () => {
