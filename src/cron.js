@@ -1,6 +1,7 @@
 require("dotenv").config();
 const cron = require("node-cron");
 const { sync } = require("./sync");
+const { verifyIntegrity } = require('./integrity-check');
 
 let running = false;
 
@@ -20,6 +21,10 @@ async function runSync() {
 }
 
 runSync();
+
+cron.schedule('0 3 * * *', async () => {
+    await verifyIntegrity();
+});
 
 cron.schedule("*/5 * * * *", runSync);
 
