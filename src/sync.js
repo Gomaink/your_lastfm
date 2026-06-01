@@ -89,7 +89,9 @@ async function sync(options = {}) {
   );
 
   const row = getLastPlayedAt.get();
-  const lastPlayedAt = isFullSync ? 0 : (row?.last || 0);
+  const lastPlayedAt = isFullSync
+    ? 0
+    : Math.max(0, (row?.last || 0) - 86400);
 
   // Get total pages
   const totalPages = await getTotalPages();
@@ -111,7 +113,7 @@ async function sync(options = {}) {
     for (const track of tracks) {
       if (!track.date) continue;
       const playedAt = Number(track.date.uts);
-      if (!isFullSync && playedAt <= lastPlayedAt) {
+      if (!isFullSync && playedAt < lastPlayedAt) {
         shouldStop = true;
         break;
       }

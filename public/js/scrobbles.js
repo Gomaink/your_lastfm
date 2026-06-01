@@ -20,6 +20,16 @@ export async function loadScrobbles(reset = true) {
 
   if (reset) container.innerHTML = "";
 
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_unique
+    ON scrobbles (
+        artist,
+        track,
+        album,
+        played_at
+    );
+  `);
+
   for (const s of scrobbles) {
     container.innerHTML += `
       <div class="scrobble-item">
