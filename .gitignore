@@ -2,3 +2,6 @@
 /data
 /node_modules
 /data/stats.db
+
+pnpm-lock.yaml
+pnpm-workspace.yaml

@@ -389,6 +389,24 @@
             </main>
         </div>
 
+        <div class="modal fade" id="album-cover-modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title" id="album-modal-title"></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img id="album-modal-image" class="album-modal-cover mb-3" alt="">
+                        <div id="album-modal-artist" class="text-secondary"></div>
+                        <small id="album-modal-plays" class="mt-1"></small>
+
+                        <div id="album-modal-tracks" class="album-modal-tracks text-start mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script type="module" src="/js/main.js"></script>
