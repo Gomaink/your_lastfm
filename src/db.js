@@ -50,6 +50,15 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS dashboard_cache (
+    cache_key TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`).run();
+
 const scrobbleColumns = db.prepare("PRAGMA table_info(scrobbles)").all();
 const hasTrackDuration = scrobbleColumns.some(column => column.name === "track_duration");
 

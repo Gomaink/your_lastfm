@@ -1429,3 +1429,146 @@ strong {
     height: 100%;
     object-fit: cover;
 }
+
+/* =========================
+   DASHBOARD TRENDS / CACHE
+========================= */
+.dashboard-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-status-copy {
+  min-width: 0;
+}
+
+#last-sync {
+  margin-bottom: 2px;
+  text-align: left;
+}
+
+#dashboard-cache-state {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.metric-trend {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.metric-trend.up {
+  color: #58dcb1;
+}
+
+.metric-trend.down {
+  color: #f27d7d;
+}
+
+.metric-trend.same {
+  color: var(--text-muted);
+}
+
+.metric-trend .mdi {
+  font-size: 1rem;
+}
+
+.chart-caption {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.listening-clock-container {
+  height: 360px;
+}
+
+.music-link {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.music-link:hover {
+  color: var(--brand-orange) !important;
+}
+
+.music-link .mdi-open-in-new {
+  margin-left: 3px;
+  font-size: 0.78rem;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.music-link:hover .mdi-open-in-new,
+.music-link:focus-visible .mdi-open-in-new {
+  opacity: 0.8;
+}
+
+.album-title-link,
+.album-artist-link {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.album-title-link strong {
+  display: inline;
+}
+
+.album-artist-link {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.artist-name-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+.artist-name-link strong,
+.song-title,
+.song-artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.song-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.song-title {
+  display: block;
+  font-weight: 500;
+}
+
+.song-artist {
+  display: block;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .dashboard-status-row {
+    align-items: flex-start;
+  }
+
+  #last-sync {
+    max-width: 68vw;
+  }
+
+  .chart-container,
+  .listening-clock-container {
+    height: 320px;
+  }
+}

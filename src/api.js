@@ -26,6 +26,8 @@ const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { getLastFmUserInfo } = require("./services/lastfm-username");
 const { getRemoteImage } = require("./services/remoteImageCache");
 const { getFriendsList, compareWithFriend } = require("./services/lastfm-friends");
+const { getDashboard } = require("./services/dashboard");
+const { invalidateDashboardCache } = require("./services/dashboardCache");
 const {
   generateShareImage,
   ShareGenerationBusyError
@@ -38,6 +40,7 @@ const EXTERNAL_REQUEST_CONCURRENCY = Number(process.env.EXTERNAL_REQUEST_CONCURR
 const publicDir = path.join(__dirname, "../public");
 const albumCoversDir = path.join(db.dataDir, "covers/albums");
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const STATIC_ASSET_CACHE_SECONDS = Math.max(0, Number(process.env.STATIC_ASSET_CACHE_SECONDS) || 300);
 
 function asyncRoute(handler) {
   return (req, res, next) => {
@@ -99,12 +102,38 @@ app.get("/api/image-proxy", asyncRoute(async (req, res) => {
   res.type(image.contentType).send(image.buffer);
 }));
 
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, {
+  etag: true,
+  lastModified: true,
+  maxAge: STATIC_ASSET_CACHE_SECONDS * 1000,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith("index.html")) {
+      res.set("Cache-Control", "no-cache");
+      return;
+    }
+
+    res.set(
+      "Cache-Control",
+      `public, max-age=${STATIC_ASSET_CACHE_SECONDS}, must-revalidate`
+    );
+  }
+}));
 
 app.get("/api/health", (req, res) => {
   const database = db.prepare("SELECT 1 AS ok").get();
   res.json({ ok: database.ok === 1, timestamp: Date.now() });
 });
+
+app.get("/api/dashboard", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const dashboard = await getDashboard(req.query);
+
+  res.set({
+    "X-Dashboard-Cache": dashboard.cache.hit ? "HIT" : "MISS",
+    "X-Dashboard-Cache-Age": String(dashboard.cache.ageMs)
+  });
+  res.json(dashboard);
+}));
 
 app.get("/api/top-artists", asyncRoute(async (req, res) => {
   setNoStore(res);
@@ -338,6 +367,7 @@ app.post("/api/album-cover", (req, res, next) => {
     SET album_image = ?
     WHERE artist = ? AND album = ?
   `).run(publicPath, artist, album);
+  invalidateDashboardCache();
 
   if (previousCover?.startsWith("/covers/albums/") && previousCover !== publicPath) {
     const previousName = path.basename(previousCover);
@@ -424,6 +454,7 @@ app.post("/api/import/scrobbles", (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const result = await importScrobbleCSV(req.file.buffer);
+  if (result.imported > 0) invalidateDashboardCache();
   res.json(result);
 }));
 

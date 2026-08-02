@@ -1,5 +1,6 @@
 services:
   app:
+    image: gomaink/your-lastfm:${YOUR_LASTFM_VERSION:-latest}
     build: .
     container_name: your_lastfm
     env_file:

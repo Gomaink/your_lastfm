@@ -2,10 +2,9 @@ import { fetchJSON } from "./api.js";
 import { buildQuery } from "./filters.js";
 import { renderCover, initCoverUploads } from "./coverUploader.js";
 import { showAlbumModal } from "./albumModal.js";
-import { escapeHTML } from "./dom.js";
+import { escapeAttribute, escapeHTML } from "./dom.js";
 
-export async function loadAlbums() {
-  const albums = await fetchJSON("/api/top-albums" + buildQuery());
+export function renderAlbums(albums = []) {
   const grid = document.getElementById("albums-grid");
   const fragment = document.createDocumentFragment();
 
@@ -21,8 +20,23 @@ export async function loadAlbums() {
         album: album.album,
         size: "large"
       })}
-      <strong>${escapeHTML(album.album)}</strong>
-      <span>${escapeHTML(album.artist)}</span>
+      <a
+        class="music-link album-title-link"
+        href="${escapeAttribute(album.url || "#")}"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open album on Last.fm"
+      >
+        <strong>${escapeHTML(album.album)}</strong>
+        <i class="mdi mdi-open-in-new"></i>
+      </a>
+      <a
+        class="music-link album-artist-link"
+        href="${escapeAttribute(album.artist_url || "#")}"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open artist on Last.fm"
+      >${escapeHTML(album.artist)}</a>
       <small>${Number(album.plays).toLocaleString()} plays</small>
     `;
 
@@ -42,4 +56,9 @@ export async function loadAlbums() {
 
   grid.appendChild(fragment);
   initCoverUploads();
+}
+
+export async function loadAlbums() {
+  const albums = await fetchJSON("/api/top-albums" + buildQuery());
+  renderAlbums(albums);
 }

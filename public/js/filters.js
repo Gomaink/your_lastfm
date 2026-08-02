@@ -1,20 +1,25 @@
 let activeRange = "";
 
-export function buildQuery() {
+export function buildQuery(extra = {}) {
   const params = new URLSearchParams();
 
   if (activeRange) {
     params.append("range", activeRange);
-    return "?" + params.toString();
+  } else {
+    const year = document.getElementById("year").value;
+    const month = document.getElementById("month").value;
+
+    if (year) params.append("year", year);
+    if (month) params.append("month", month);
   }
 
-  const year = document.getElementById("year").value;
-  const month = document.getElementById("month").value;
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  }
 
-  if (year) params.append("year", year);
-  if (month) params.append("month", month);
-
-  return params.toString() ? "?" + params.toString() : "";
+  return params.toString() ? `?${params.toString()}` : "";
 }
 
 export function initFilters(onChange) {
@@ -22,18 +27,18 @@ export function initFilters(onChange) {
   const monthSelect = document.getElementById("month");
   const currentYear = new Date().getFullYear();
 
-  yearSelect.innerHTML = `<option value="">All</option>`;
-  for (let y = currentYear; y >= 2002; y--) {
-    const opt = document.createElement("option");
-    opt.value = y;
-    opt.textContent = y;
-    yearSelect.appendChild(opt);
+  yearSelect.innerHTML = '<option value="">All</option>';
+  for (let year = currentYear; year >= 2002; year--) {
+    const option = document.createElement("option");
+    option.value = year;
+    option.textContent = year;
+    yearSelect.appendChild(option);
   }
 
   function handleManualChange() {
     activeRange = "";
     document.querySelectorAll(".range-pill")
-      .forEach(b => b.classList.remove("active"));
+      .forEach(button => button.classList.remove("active"));
 
     onChange();
   }
@@ -41,18 +46,15 @@ export function initFilters(onChange) {
   yearSelect.addEventListener("change", handleManualChange);
   monthSelect.addEventListener("change", handleManualChange);
 
-  document.querySelectorAll(".range-pill").forEach(btn => {
-    btn.addEventListener("click", () => {
-
+  document.querySelectorAll(".range-pill").forEach(button => {
+    button.addEventListener("click", () => {
       document.querySelectorAll(".range-pill")
-        .forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
+        .forEach(item => item.classList.remove("active"));
+      button.classList.add("active");
 
-      activeRange = btn.dataset.range;
-
+      activeRange = button.dataset.range;
       yearSelect.value = "";
       monthSelect.value = "";
-
       onChange();
     });
   });

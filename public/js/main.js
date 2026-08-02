@@ -1,10 +1,10 @@
 import { fetchJSON } from "./api.js";
-import { initFilters } from "./filters.js";
-import { loadSummary } from "./summary.js";
-import { loadAlbums } from "./albums.js";
-import { loadChart } from "./charts.js";
-import { loadTopSongs } from "./topSongs.js";
-import { loadTopArtists } from "./artists.js";
+import { initFilters, buildQuery } from "./filters.js";
+import { renderSummary } from "./summary.js";
+import { renderAlbums } from "./albums.js";
+import { renderDailyChart, renderListeningClock } from "./charts.js";
+import { renderTopSongs } from "./topSongs.js";
+import { renderTopArtists } from "./artists.js";
 import { loadScrobbles } from "./scrobbles.js";
 import { loadAccount } from "./account.js";
 import { initSharePage } from "./share.js";
@@ -18,19 +18,13 @@ const UI = {
   sidebarOverlay: document.getElementById("sidebar-overlay"),
   sidebarOpenButton: document.getElementById("open-sidebar"),
   syncButton: document.getElementById("sync-btn"),
-  lastSync: document.getElementById("last-sync")
-};
-
-const CHART_DAILY_CONFIG = {
-  url: "/api/plays-per-day",
-  canvasId: "daily",
-  labelKey: "day",
-  valueKey: "plays",
-  label: "Plays per day"
+  lastSync: document.getElementById("last-sync"),
+  dashboardCacheState: document.getElementById("dashboard-cache-state")
 };
 
 let syncPollTimer = null;
 let dashboardLoadCounter = 0;
+let dashboardAbortController = null;
 
 function isDashboardVisible() {
   return !document.getElementById("dashboard-view")?.classList.contains("d-none");
@@ -58,6 +52,19 @@ function renderSyncState(timestamp, status = {}) {
   UI.lastSync.textContent = formatLastSync(timestamp);
   UI.syncButton.disabled = false;
   UI.syncButton.innerHTML = '<i class="mdi mdi-sync"></i> Sync';
+}
+
+function renderDashboardCacheState(cache = {}) {
+  if (!UI.dashboardCacheState) return;
+
+  const cachedAt = Number(cache.cachedAt || 0);
+  if (!cachedAt) {
+    UI.dashboardCacheState.textContent = "";
+    return;
+  }
+
+  const prefix = cache.hit ? "Loaded from dashboard cache" : "Dashboard cache refreshed";
+  UI.dashboardCacheState.textContent = `${prefix} · ${new Date(cachedAt).toLocaleTimeString()}`;
 }
 
 async function refreshSyncState() {
@@ -128,23 +135,36 @@ function initSyncControls() {
     .catch(error => console.error("Could not load sync status:", error));
 }
 
+function renderDashboard(data) {
+  renderSummary(data.summary);
+  renderAlbums(data.topAlbums);
+  renderTopSongs(data.topTracks);
+  renderTopArtists(data.topArtists);
+  renderDailyChart(data.playsPerDay);
+  renderListeningClock(data.listeningClock);
+  renderDashboardCacheState(data.cache);
+}
+
 async function reloadDashboardData({ skipSyncRefresh = false } = {}) {
   const loadId = ++dashboardLoadCounter;
+  dashboardAbortController?.abort();
+  dashboardAbortController = new AbortController();
   UI.loading.style.display = "flex";
 
   try {
-    await Promise.all([
-      loadSummary(),
-      loadAlbums(),
-      loadTopSongs(),
-      loadTopArtists(),
-      loadChart(CHART_DAILY_CONFIG)
-    ]);
+    const query = buildQuery({ tzOffset: new Date().getTimezoneOffset() });
+    const data = await fetchJSON(`/api/dashboard${query}`, {
+      cache: "no-store",
+      signal: dashboardAbortController.signal
+    });
 
-    if (!skipSyncRefresh && loadId === dashboardLoadCounter) {
-      await refreshSyncState();
-    }
+    if (loadId !== dashboardLoadCounter) return;
+    renderDashboard(data);
+
+    if (!skipSyncRefresh) await refreshSyncState();
   } catch (error) {
+    if (error.name === "AbortError") return;
+
     console.error("Error loading dashboard:", error);
     showToast(error.message || "Error loading dashboard", "error");
   } finally {

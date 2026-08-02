@@ -7,7 +7,9 @@ YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scr
 - Incremental Last.fm synchronization with a configurable overlap window.
 - Automatic first full sync when the database is empty.
 - Cross-process sync lock, resumable sync windows, progress reporting, retries, and a daily integrity check.
-- Dashboard with top artists, albums, tracks, daily activity, account statistics, and recent scrobbles.
+- Dashboard with top artists, albums, tracks, daily activity, previous-period trends, a local-time Listening Clock, account statistics, and recent scrobbles.
+- Direct Last.fm links for artists, albums, and tracks.
+- Persistent SQLite dashboard cache invalidated after syncs, imports, and manual cover changes.
 - Last.fm friends comparison with common artists, albums, and tracks, including resilient artwork and avatar fallbacks.
 - Standard and Instagram Story recap images generated on the server.
 - Automatic album/artist image lookup, persistent image cache, and manual album-cover uploads.
@@ -33,6 +35,15 @@ LASTFM_USERNAME=your_lastfm_username
 ```
 
 ## Run with Docker Compose
+
+Use the published image:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Or build the current source locally:
 
 ```bash
 docker compose up -d --build
@@ -97,6 +108,8 @@ The defaults are documented in `.env.example`.
 | `SYNC_OVERLAP_SECONDS` | Re-fetch window used to safely catch late scrobbles | `86400` |
 | `LASTFM_REQUEST_DELAY_MS` | Delay between Last.fm history pages | `250` |
 | `LASTFM_REQUEST_TIMEOUT_MS` | Last.fm request timeout | `15000` |
+| `DASHBOARD_CACHE_TTL_MS` | Persistent dashboard cache lifetime in milliseconds; `0` disables time-based expiry | `300000` |
+| `STATIC_ASSET_CACHE_SECONDS` | Browser cache lifetime for local JavaScript, CSS, and images | `300` |
 | `EXTERNAL_REQUEST_CONCURRENCY` | Concurrent metadata/image lookups | `4` |
 | `FRIENDS_CACHE_TTL_MS` | In-memory cache lifetime for the Last.fm friends list | `300000` |
 | `IMAGE_FAILURE_CACHE_MS` | Time before retrying an image lookup that returned nothing | `600000` |
@@ -105,6 +118,18 @@ The defaults are documented in `.env.example`.
 | `SHARE_MAX_CONCURRENT` | Maximum simultaneous recap renders | `2` |
 | `SHARE_IMAGE_MAX_BYTES` | Maximum downloaded image size | `10485760` |
 | `CORS_ORIGIN` | Optional comma-separated external origins | empty |
+
+## Dashboard caching
+
+The browser loads the main Dashboard through a single `/api/dashboard` request. The generated response is stored in SQLite, so reopening the Dashboard or returning to a previously used filter does not repeat the expensive aggregation and artwork lookups.
+
+The cache is invalidated automatically when:
+
+- a synchronization completes;
+- a CSV import adds scrobbles;
+- a manual album cover is changed.
+
+Rolling periods compare against the immediately preceding equivalent window. The Listening Clock uses the timezone offset reported by the browser.
 
 ## Data and backups
 

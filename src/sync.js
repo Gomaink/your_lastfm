@@ -9,6 +9,7 @@ const { fetchWithRetry } = require("./utils/fetchRetry");
 const { assertLastFmResponse } = require("./utils/lastfmResponse");
 const { sanitizeError } = require("./utils/sanitizeAxios");
 const { parseSyncCheckpoint, resolveSyncWindow } = require("./utils/syncWindow");
+const { invalidateDashboardCache } = require("./services/dashboardCache");
 
 const CONFIG = {
   API_URL: "https://ws.audioscrobbler.com/2.0/",
@@ -305,6 +306,7 @@ async function runSync(options, lock) {
     const finishedAt = Date.now();
     deleteMetadata.run(CHECKPOINT_KEY);
     setMetadata.run("last_sync", String(finishedAt));
+    invalidateDashboardCache();
     saveSyncStatus({
       running: false,
       mode,

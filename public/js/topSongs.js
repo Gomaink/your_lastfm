@@ -1,7 +1,7 @@
 import { fetchJSON } from "./api.js";
 import { buildQuery } from "./filters.js";
 import { renderCover, initCoverUploads } from "./coverUploader.js";
-import { escapeHTML } from "./dom.js";
+import { escapeAttribute, escapeHTML } from "./dom.js";
 
 function formatDuration(totalSeconds) {
   const secondsValue = Number(totalSeconds) || 0;
@@ -14,8 +14,7 @@ function formatDuration(totalSeconds) {
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-export async function loadTopSongs() {
-  const data = await fetchJSON("/api/top-tracks" + buildQuery());
+export function renderTopSongs(data = []) {
   const container = document.getElementById("top-songs");
 
   container.innerHTML = data.map((row, index) => `
@@ -27,9 +26,24 @@ export async function loadTopSongs() {
           artist: row.artist,
           album: row.album
         })}
-        <div>
-          <div class="song-title">${escapeHTML(row.track)}</div>
-          <div class="song-artist">${escapeHTML(row.artist)}</div>
+        <div class="song-copy">
+          <a
+            class="music-link song-title"
+            href="${escapeAttribute(row.url || "#")}"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open track on Last.fm"
+          >
+            ${escapeHTML(row.track)}
+            <i class="mdi mdi-open-in-new"></i>
+          </a>
+          <a
+            class="music-link song-artist"
+            href="${escapeAttribute(row.artist_url || "#")}"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open artist on Last.fm"
+          >${escapeHTML(row.artist)}</a>
         </div>
       </div>
       <span>${Number(row.plays).toLocaleString()}</span>
@@ -38,4 +52,9 @@ export async function loadTopSongs() {
   `).join("");
 
   initCoverUploads();
+}
+
+export async function loadTopSongs() {
+  const data = await fetchJSON("/api/top-tracks" + buildQuery());
+  renderTopSongs(data);
 }

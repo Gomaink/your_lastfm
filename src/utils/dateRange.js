@@ -1,5 +1,5 @@
-function getDateRange(range, year, month) {
-  const now = new Date();
+function getDateRange(range, year, month, referenceDate = new Date()) {
+  const now = new Date(referenceDate);
 
   if (range) {
     const from = new Date(now);

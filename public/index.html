@@ -68,9 +68,11 @@
                         <div class="spinner-border text-light" role="status"></div>
                     </div>
 
-                    <div id="last-sync" role="status" aria-live="polite"></div>
-                    
-                    <div class="d-flex justify-content-end mb-3">
+                    <div class="dashboard-status-row mb-3">
+                        <div class="dashboard-status-copy">
+                            <div id="last-sync" role="status" aria-live="polite"></div>
+                            <div id="dashboard-cache-state" aria-live="polite"></div>
+                        </div>
                         <button id="sync-btn" class="btn btn-sm btn-outline-warning">
                             <i class="mdi mdi-sync"></i>
                             Sync
@@ -128,7 +130,8 @@
                                         class="mdi mdi-timer-outline me-1 text-green"
                                     ></i>
                                     Minutes Listened
-                                    <p class="card-text fs-2" id="hours">0h</p>
+                                    <p class="card-text fs-2 mb-1" id="hours">0</p>
+                                    <div class="metric-trend" id="hours-trend"></div>
                                 </div>
                             </div>
                         </div>
@@ -139,7 +142,8 @@
                                         class="mdi mdi-music-note-outline me-1 text-green"
                                     ></i>
                                     Songs Played
-                                    <p class="card-text fs-2" id="plays">0</p>
+                                    <p class="card-text fs-2 mb-1" id="plays">0</p>
+                                    <div class="metric-trend" id="plays-trend"></div>
                                 </div>
                             </div>
                         </div>
@@ -150,7 +154,8 @@
                                         class="mdi mdi-calendar-range me-1 text-green"
                                     ></i>
                                     Daily Average
-                                    <p class="card-text fs-2" id="avg">0</p>
+                                    <p class="card-text fs-2 mb-1" id="avg">0</p>
+                                    <div class="metric-trend" id="avg-trend"></div>
                                 </div>
                             </div>
                         </div>
@@ -159,7 +164,7 @@
                     <section class="mb-5">
                         <div class="mb-2">
                             <i class="mdi mdi-album me-1 text-green"></i>
-                            Top Album
+                            Top Albums
                         </div>
                         <div class="albums-scroll" id="albums-grid"></div>
                     </section>
@@ -201,17 +206,32 @@
                             </div>
                         </div>
 
-                        <div class="col-md-12">
-                            <div class="card bg-light shadow-sm">
+                        <div class="col-xl-7 col-md-12">
+                            <div class="card bg-light shadow-sm h-100">
                                 <div class="card-body text-light">
-                                    <div class="mb-3">
-                                        <i
-                                            class="mdi mdi-chart-line me-1 text-green"
-                                        ></i>
-                                        Plays per Day
+                                    <div class="card-header-title mb-3">
+                                        <i class="mdi mdi-chart-line text-green"></i>
+                                        <span>Plays per Day</span>
                                     </div>
                                     <div class="chart-container">
                                         <canvas id="daily"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-5 col-md-12">
+                            <div class="card bg-light shadow-sm h-100">
+                                <div class="card-body text-light">
+                                    <div class="card-header-title mb-1">
+                                        <i class="mdi mdi-clock-outline text-green"></i>
+                                        <span>Listening Clock</span>
+                                    </div>
+                                    <div id="peak-listening-hour" class="chart-caption mb-3">
+                                        Listening activity by local hour
+                                    </div>
+                                    <div class="chart-container listening-clock-container">
+                                        <canvas id="listening-clock"></canvas>
                                     </div>
                                 </div>
                             </div>
