@@ -1,6 +1,6 @@
 {
   "name": "your_lastfm",
-  "version": "1.0.0",
+  "version": "1.1.2",
   "description": "Self-hosted Last.fm scrobble dashboard, sync service and recap generator",
   "main": "src/api.js",
   "scripts": {
