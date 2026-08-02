@@ -11,6 +11,7 @@ const cron = require("node-cron");
 
 const db = require("./db");
 
+const { sync } = require('./sync');
 const { verifyIntegrity } = require('./integrity-check');
 const { getActiveFilter } = require("./utils/filters");
 const { fillMissingDates } = require("./utils/dateRange");
@@ -33,16 +34,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
-
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_unique
-  ON scrobbles (
-      artist,
-      track,
-      album,
-      played_at
-  );
-`);
 
 app.get("/api/top-artists", async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -105,6 +96,28 @@ app.get("/api/top-tracks", async (req, res) => {
   }
 
   res.json(rows);
+});
+
+app.get('/api/last-sync', (req, res) => {
+    const row = db.prepare(`
+        SELECT value
+        FROM metadata
+        WHERE key = 'last_sync'
+    `).get();
+
+    res.json({
+        timestamp: Number(row?.value || 0)
+    });
+});
+
+app.post('/api/sync', async (req, res) => {
+    sync()
+        .then(() => console.log('Manual sync finished'))
+        .catch(console.error);
+
+    res.json({
+        success: true
+    });
 });
 
 app.get("/api/plays-per-day", (req, res) => {

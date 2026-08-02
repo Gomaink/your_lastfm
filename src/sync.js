@@ -135,6 +135,11 @@ async function sync(options = {}) {
   }
 
   console.log(`✨ Sync finished - Total new scrobbles: ${totalInserted}`);
+
+  db.prepare(`
+      INSERT OR REPLACE INTO metadata (key, value)
+      VALUES ('last_sync', ?)
+  `).run(Date.now().toString());
 }
 
 module.exports = { sync };

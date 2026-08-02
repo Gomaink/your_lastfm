@@ -11,7 +11,7 @@ import { loadFriends } from "./friends.js";
 
 const UI = {
   loading: document.getElementById("global-loading"),
-  sections: document.querySelectorAll("main > section"),
+  sections: document.querySelectorAll("[id$='-view']"),
   sidebarButtons: document.querySelectorAll(".sidebar-link"),
   sidebar: document.querySelector(".sidebar"),
   sidebarOverlay: document.getElementById("sidebar-overlay")
@@ -26,6 +26,7 @@ const CHART_DAILY_CONFIG = {
 };
 
 async function reloadDashboardData() {
+  console.log("Loading dashboard...");
   UI.loading.style.display = "flex";
 
   try {
@@ -36,11 +37,51 @@ async function reloadDashboardData() {
       loadTopArtists(),
       loadChart(CHART_DAILY_CONFIG)
     ]);
+
+    const res = await fetch('/api/last-sync');
+    const data = await res.json();
+
+    document.getElementById('last-sync').innerText =
+      `Last sync: ${new Date(data.timestamp).toLocaleString()}`;
+
+    document
+      .getElementById('sync-now')
+      .addEventListener('click', async () => {
+          await fetch('/api/sync', {
+              method: 'POST'
+          });
+
+          let syncStatus = {
+              running: false,
+              page: 0,
+              totalPages: 0,
+              inserted: 0,
+              message: ''
+          };
+      });
+
   } catch (error) {
     console.error("Error loading dashboard:", error);
   } finally {
     UI.loading.style.display = "none";
   }
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+
+    toast.className = `sync-toast ${type}`;
+    toast.innerHTML = message;
+
+    document
+        .getElementById('toast-container')
+        .appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('hide');
+
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
 }
 
 function closeSidebarOnMobile() {
@@ -58,6 +99,7 @@ window.addEventListener("resize", () => {
 });
 
 function toggleView(viewName) {
+  console.log("Opening view:", viewName);
   localStorage.setItem("activeView", viewName);
 
   UI.sidebarButtons.forEach(btn => {

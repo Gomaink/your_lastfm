@@ -24,6 +24,22 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT
+  );
+`).run();
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_unique
+  ON scrobbles (
+      artist,
+      track,
+      album,
+      played_at
+  );
+`);
 
 try {
   db.prepare(`
