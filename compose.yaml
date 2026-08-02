@@ -9,3 +9,14 @@ services:
     ports:
       - "1533:1533"
     restart: unless-stopped
+
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - node_modules/
+            - data/
+        - action: rebuild
+          path: package.json
