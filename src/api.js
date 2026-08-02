@@ -215,6 +215,29 @@ app.post("/api/album-cover", upload.single("cover"), (req, res) => {
   res.json({ image: publicPath });
 });
 
+app.post("/api/album-tracks", (req, res) => {
+  const { artist, album } = req.body;
+
+  if (!artist || !album) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+
+  const filter = getActiveFilter(req.query);
+  const filterClause = filter.where ? `AND ${filter.where}` : '';
+
+  const tracks = db.prepare(`
+    SELECT track, COUNT(*) plays
+    FROM scrobbles
+    WHERE album = ?
+    AND artist = ?
+    ${filterClause}
+    GROUP BY track
+    ORDER BY plays DESC
+  `).all(album, artist, ...(filter.params || []));
+
+  res.json(tracks);
+})
+
 app.get("/api/recent-scrobbles", async (req, res) => {
   try {
     const page = Number(req.query.page || 1);
