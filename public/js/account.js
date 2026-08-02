@@ -1,5 +1,5 @@
 import { fetchJSON } from "./api.js";
-import { safeImageUrl } from "./dom.js";
+import { installImageFallback, safeImageUrl } from "./dom.js";
 
 let listenersAttached = false;
 
@@ -18,7 +18,10 @@ async function fetchAndRenderStats() {
     updateText("profile-username", data.username || "User");
 
     const avatar = document.querySelector(".profile-avatar img");
-    if (avatar) avatar.src = safeImageUrl(data.avatar);
+    if (avatar) {
+      avatar.src = safeImageUrl(data.avatar);
+      installImageFallback(avatar);
+    }
 
     const format = number => new Intl.NumberFormat("pt-BR").format(number || 0);
     updateText("profile-total-scrobbles", format(data.totalScrobbles));

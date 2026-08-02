@@ -1,7 +1,13 @@
 import { fetchJSON } from "./api.js";
-import { escapeAttribute, escapeHTML, safeImageUrl } from "./dom.js";
+import {
+  escapeAttribute,
+  escapeHTML,
+  installImageFallbacks,
+  safeImageUrl
+} from "./dom.js";
 
 const PLACEHOLDER_AVATAR = "/images/artist-placeholder.png";
+const PLACEHOLDER_COVER = "/images/cover-placeholder.svg";
 
 function showLoading() {
   const loader = document.getElementById("global-loading-friends");
@@ -11,17 +17,6 @@ function showLoading() {
 function hideLoading() {
   const loader = document.getElementById("global-loading-friends");
   if (loader) loader.style.display = "none";
-}
-
-function getApiImage(images) {
-  if (!Array.isArray(images)) return PLACEHOLDER_AVATAR;
-
-  for (let index = images.length - 1; index >= 0; index--) {
-    const image = images[index]?.["#text"];
-    if (image) return safeImageUrl(image, PLACEHOLDER_AVATAR);
-  }
-
-  return PLACEHOLDER_AVATAR;
 }
 
 export async function loadFriends() {
@@ -41,14 +36,17 @@ function renderFriendsList(friends, container) {
     <h2 class="section-title mb-4 ps-3">Friends (${friends.length})</h2>
     <div class="friends-grid ps-3 pe-3">
       ${friends.map(friend => {
-        const avatar = getApiImage(friend.image);
+        const avatar = safeImageUrl(friend.avatar, PLACEHOLDER_AVATAR);
         return `
           <button class="friend-card shadow-sm" data-user="${escapeAttribute(friend.name)}" type="button">
             <img
               src="${escapeAttribute(avatar)}"
+              data-fallback="${PLACEHOLDER_AVATAR}"
               alt="${escapeAttribute(friend.name)}"
               class="friend-avatar"
               loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
             />
             <div class="friend-info">
               <strong>${escapeHTML(friend.name)}</strong>
@@ -59,6 +57,8 @@ function renderFriendsList(friends, container) {
     </div>
     <div id="comparison-container" class="d-none p-3"></div>
   `;
+
+  installImageFallbacks(container);
 
   container.querySelectorAll(".friend-card").forEach(card => {
     card.addEventListener("click", () => loadComparison(card.dataset.user));
@@ -98,10 +98,13 @@ function renderCommonItem(item, friendUsername) {
     <div class="common-item">
       <div class="common-img-wrap">
         <img
-          src="${escapeAttribute(safeImageUrl(item.image))}"
+          src="${escapeAttribute(safeImageUrl(item.image, PLACEHOLDER_COVER))}"
+          data-fallback="${PLACEHOLDER_COVER}"
           alt="${escapeAttribute(item.name)}"
           class="cover-img"
           loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
         />
       </div>
       <div class="common-info">
@@ -132,14 +135,24 @@ function renderComparison(data, container) {
       <h2>${escapeHTML(user.username)} <span class="text-muted fs-5">vs</span> ${escapeHTML(friend.username)}</h2>
       <div class="avatars-vs">
         <div class="vs-avatar-container">
-          <img src="${escapeAttribute(myAvatar)}" class="vs-avatar" alt="Your avatar" />
+          <img
+            src="${escapeAttribute(myAvatar)}"
+            data-fallback="${PLACEHOLDER_AVATAR}"
+            class="vs-avatar"
+            alt="Your avatar"
+            decoding="async"
+            referrerpolicy="no-referrer"
+          />
         </div>
         <span>VS</span>
         <div class="vs-avatar-container" style="border-color: #555">
           <img
-            src="${escapeAttribute(safeImageUrl(friend.avatar))}"
+            src="${escapeAttribute(safeImageUrl(friend.avatar, PLACEHOLDER_AVATAR))}"
+            data-fallback="${PLACEHOLDER_AVATAR}"
             class="vs-avatar"
             alt="${escapeAttribute(friend.username)}"
+            decoding="async"
+            referrerpolicy="no-referrer"
           />
         </div>
       </div>
@@ -199,6 +212,7 @@ function renderComparison(data, container) {
     </div>
   `;
 
+  installImageFallbacks(container);
   container.querySelector(".btn-back")?.addEventListener("click", backToList);
 }
 

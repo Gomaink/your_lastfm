@@ -3,6 +3,7 @@ const { createCanvas } = require("canvas");
 const db = require("../db");
 const { ensureAlbumCover } = require("./albumCoverCache");
 const { ensureArtistImage } = require("./artistImageCache");
+const { ensureTrackCover } = require("./trackCoverCache");
 const { getLastFmUserInfo } = require("./lastfm-username");
 const { loadShareImage } = require("./shareImageLoader");
 const { mapWithConcurrency } = require("../utils/mapWithConcurrency");
@@ -130,7 +131,7 @@ function queryShareData(start, types, limits) {
 async function enrichShareData(data) {
   if (data.albums) {
     data.albums = await mapWithConcurrency(data.albums, IMAGE_CONCURRENCY, async item => {
-      const albumImage = item.album_image || await ensureAlbumCover(item.artist, item.album);
+      const albumImage = await ensureAlbumCover(item.artist, item.album);
       return {
         ...item,
         album_image: albumImage,
@@ -141,7 +142,7 @@ async function enrichShareData(data) {
 
   if (data.artists) {
     data.artists = await mapWithConcurrency(data.artists, IMAGE_CONCURRENCY, async item => {
-      const artistImage = item.artist_image || await ensureArtistImage(item.artist);
+      const artistImage = await ensureArtistImage(item.artist);
       return {
         ...item,
         artist_image: artistImage,
@@ -152,8 +153,9 @@ async function enrichShareData(data) {
 
   if (data.tracks) {
     data.tracks = await mapWithConcurrency(data.tracks, IMAGE_CONCURRENCY, async item => {
-      const albumImage = item.album_image
-        || (item.album ? await ensureAlbumCover(item.artist, item.album) : null);
+      const albumImage = item.album
+        ? await ensureAlbumCover(item.artist, item.album)
+        : await ensureTrackCover(item.artist, item.track);
 
       return {
         ...item,

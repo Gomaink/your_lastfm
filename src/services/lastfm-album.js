@@ -3,6 +3,7 @@ require("dotenv").config();
 
 const { fetchWithRetry } = require("../utils/fetchRetry");
 const { assertLastFmResponse } = require("../utils/lastfmResponse");
+const { getLastFmImage } = require("../utils/lastfmImage");
 const { sanitizeError } = require("../utils/sanitizeAxios");
 
 const LASTFM_URL = "https://ws.audioscrobbler.com/2.0/";
@@ -18,6 +19,7 @@ async function getAlbumImage(artist, album) {
           api_key: process.env.LASTFM_API_KEY,
           artist,
           album,
+          autocorrect: 1,
           format: "json"
         }
       });
@@ -25,15 +27,7 @@ async function getAlbumImage(artist, album) {
       return result;
     });
 
-    const images = response.data?.album?.image;
-    if (!Array.isArray(images)) return null;
-
-    for (let index = images.length - 1; index >= 0; index--) {
-      const image = images[index]?.["#text"]?.trim();
-      if (image) return image;
-    }
-
-    return null;
+    return getLastFmImage(response.data?.album?.image);
   } catch (error) {
     console.warn(`⚠️ [Last.fm] Album image failed: ${artist} - ${album}`, sanitizeError(error));
     return null;

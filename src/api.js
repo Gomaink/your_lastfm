@@ -17,12 +17,14 @@ const { fetchWithRetry } = require("./utils/fetchRetry");
 const { assertLastFmResponse } = require("./utils/lastfmResponse");
 const { mapWithConcurrency } = require("./utils/mapWithConcurrency");
 const { sanitizeError } = require("./utils/sanitizeAxios");
+const { getLastFmImage } = require("./utils/lastfmImage");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
 const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { getLastFmUserInfo } = require("./services/lastfm-username");
+const { getRemoteImage } = require("./services/remoteImageCache");
 const { getFriendsList, compareWithFriend } = require("./services/lastfm-friends");
 const {
   generateShareImage,
@@ -81,6 +83,22 @@ app.use("/covers", express.static(path.join(db.dataDir, "covers"), {
   immutable: true,
   maxAge: "30d"
 }));
+
+app.get("/api/image-proxy", asyncRoute(async (req, res) => {
+  const source = String(req.query.url || "").trim();
+  if (!source) return res.status(400).json({ error: "Missing image URL" });
+
+  const image = await getRemoteImage(source);
+  if (req.headers["if-none-match"] === image.etag) return res.status(304).end();
+
+  res.set({
+    "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+    ETag: image.etag,
+    "X-Content-Type-Options": "nosniff"
+  });
+  res.type(image.contentType).send(image.buffer);
+}));
+
 app.use(express.static(publicDir));
 
 app.get("/api/health", (req, res) => {
@@ -132,9 +150,7 @@ app.get("/api/top-tracks", asyncRoute(async (req, res) => {
   const result = await mapWithConcurrency(rows, EXTERNAL_REQUEST_CONCURRENCY, async row => {
     const [duration, albumImage] = await Promise.all([
       ensureTrackDuration(row.artist, row.track),
-      row.album_image
-        ? Promise.resolve(row.album_image)
-        : ensureAlbumCover(row.artist, row.album)
+      ensureAlbumCover(row.artist, row.album)
     ]);
 
     return {
@@ -246,7 +262,7 @@ app.get("/api/top-albums", asyncRoute(async (req, res) => {
 
   const result = await mapWithConcurrency(albums, EXTERNAL_REQUEST_CONCURRENCY, async album => ({
     ...album,
-    album_image: album.album_image || await ensureAlbumCover(album.artist, album.album)
+    album_image: await ensureAlbumCover(album.artist, album.album)
   }));
 
   res.json(result);
@@ -388,9 +404,7 @@ app.get("/api/recent-scrobbles", asyncRoute(async (req, res) => {
     .map(track => ({
       track: track.name,
       artist: track.artist?.["#text"] || "Unknown artist",
-      image: track.image?.find(image => image.size === "extralarge")?.["#text"]
-        || track.image?.find(image => image.size === "large")?.["#text"]
-        || null,
+      image: getLastFmImage(track.image),
       nowPlaying: Boolean(track["@attr"]?.nowplaying),
       date: track.date ? Number(track.date.uts) * 1000 : null
     }));

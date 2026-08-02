@@ -3,6 +3,8 @@ require("dotenv").config();
 
 const { fetchWithRetry } = require("../utils/fetchRetry");
 const { assertLastFmResponse } = require("../utils/lastfmResponse");
+const { getLastFmImage } = require("../utils/lastfmImage");
+const { toImageProxyUrl } = require("./remoteImageCache");
 
 const REQUEST_TIMEOUT = Number(process.env.LASTFM_REQUEST_TIMEOUT_MS || 15000);
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -30,13 +32,9 @@ async function fetchLastFmUserInfo() {
   const user = response.data?.user;
   if (!user) throw new Error("Last.fm user not found");
 
-  const images = Array.isArray(user.image) ? user.image : [];
-  const avatarObj = images.find(image => image.size === "extralarge")
-    || images.find(image => image.size === "large");
-
   return {
     name: user.name || process.env.LASTFM_USERNAME || "User",
-    avatar: avatarObj?.["#text"] || null
+    avatar: toImageProxyUrl(getLastFmImage(user.image))
   };
 }
 

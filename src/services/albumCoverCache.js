@@ -1,39 +1,60 @@
 const { getAlbumImage } = require("./lastfm-album");
 const { getDeezerAlbumImage } = require("./deezer-album");
+const { isUsableImageUrl, normalizeImageUrl } = require("../utils/lastfmImage");
 const db = require("../db");
 
-const getCachedCover = db.prepare(`
-  SELECT MAX(NULLIF(album_image, '')) AS album_image
+const getCachedCovers = db.prepare(`
+  SELECT DISTINCT album_image
   FROM scrobbles
-  WHERE artist = ? AND album = ?
+  WHERE artist = ? COLLATE NOCASE
+    AND album = ? COLLATE NOCASE
+    AND album_image IS NOT NULL
+    AND TRIM(album_image) != ''
 `);
 
 const updateCachedCover = db.prepare(`
   UPDATE scrobbles
   SET album_image = ?
-  WHERE artist = ? AND album = ?
+  WHERE artist = ? COLLATE NOCASE
+    AND album = ? COLLATE NOCASE
 `);
 
 const inFlight = new Map();
 const failedUntil = new Map();
 const failureTtlMs = Math.max(60000, Number(process.env.IMAGE_FAILURE_CACHE_MS) || 10 * 60 * 1000);
 
+function getCachedAlbumCover(artist, album) {
+  const rows = getCachedCovers.all(artist, album);
+
+  for (const row of rows) {
+    const image = normalizeImageUrl(row.album_image);
+    if (isUsableImageUrl(image)) return image;
+  }
+
+  return null;
+}
+
+function rememberAlbumCover(artist, album, image) {
+  const normalized = normalizeImageUrl(image);
+  if (!artist || !album || !isUsableImageUrl(normalized)) return null;
+
+  updateCachedCover.run(normalized, artist, album);
+  return normalized;
+}
+
 async function fetchAndCacheAlbumCover(artist, album) {
   let image = await getAlbumImage(artist, album);
   if (!image) image = await getDeezerAlbumImage(artist, album);
-  if (!image) return null;
-
-  updateCachedCover.run(image, artist, album);
-  return image;
+  return rememberAlbumCover(artist, album, image);
 }
 
 async function ensureAlbumCover(artist, album) {
   if (!artist || !album) return null;
 
-  const cached = getCachedCover.get(artist, album)?.album_image;
+  const cached = getCachedAlbumCover(artist, album);
   if (cached) return cached;
 
-  const key = `${artist}\u0000${album}`;
+  const key = `${String(artist).toLocaleLowerCase()}\u0000${String(album).toLocaleLowerCase()}`;
   if ((failedUntil.get(key) || 0) > Date.now()) return null;
   if (inFlight.has(key)) return inFlight.get(key);
 
@@ -49,4 +70,8 @@ async function ensureAlbumCover(artist, album) {
   return request;
 }
 
-module.exports = { ensureAlbumCover };
+module.exports = {
+  ensureAlbumCover,
+  getCachedAlbumCover,
+  rememberAlbumCover
+};

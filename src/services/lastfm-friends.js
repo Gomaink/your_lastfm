@@ -2,9 +2,24 @@ require("dotenv").config();
 
 const axios = require("axios");
 
-const { getDeezerAlbumImage } = require("./deezer-album");
-const { fetchArtistImage } = require("./deezerArtistImage");
+const {
+  ensureAlbumCover,
+  getCachedAlbumCover,
+  rememberAlbumCover
+} = require("./albumCoverCache");
+const {
+  ensureArtistImage,
+  getCachedArtistImage,
+  rememberArtistImage
+} = require("./artistImageCache");
+const {
+  ensureTrackCover,
+  getCachedTrackCover,
+  rememberTrackCover
+} = require("./trackCoverCache");
 const { fetchWithRetry } = require("../utils/fetchRetry");
+const { toImageProxyUrl } = require("./remoteImageCache");
+const { getLastFmImage } = require("../utils/lastfmImage");
 const { assertLastFmResponse } = require("../utils/lastfmResponse");
 const { mapWithConcurrency } = require("../utils/mapWithConcurrency");
 const { sanitizeError } = require("../utils/sanitizeAxios");
@@ -12,9 +27,11 @@ const { sanitizeError } = require("../utils/sanitizeAxios");
 const API_KEY = process.env.LASTFM_API_KEY;
 const MAIN_USER = process.env.LASTFM_USERNAME;
 const BASE_URL = "https://ws.audioscrobbler.com/2.0/";
-const PLACEHOLDER_IMG = "/images/artist-placeholder.png";
+const AVATAR_PLACEHOLDER = "/images/artist-placeholder.png";
+const COVER_PLACEHOLDER = "/images/cover-placeholder.svg";
 const REQUEST_TIMEOUT = Number(process.env.LASTFM_REQUEST_TIMEOUT_MS || 15000);
-const IMAGE_CONCURRENCY = Number(process.env.EXTERNAL_REQUEST_CONCURRENCY || 4);
+const IMAGE_CONCURRENCY = Math.max(1, Number(process.env.EXTERNAL_REQUEST_CONCURRENCY || 4));
+const FRIENDS_CACHE_TTL_MS = Math.max(30000, Number(process.env.FRIENDS_CACHE_TTL_MS) || 5 * 60 * 1000);
 
 const normalize = value => {
   if (!value) return [];
@@ -24,16 +41,9 @@ const normalize = value => {
 const normalizeKey = value => String(value || "").trim().toLocaleLowerCase();
 const compoundKey = (name, artist) => `${normalizeKey(name)}\u0000${normalizeKey(artist)}`;
 
-const getApiImage = imageArray => {
-  if (!Array.isArray(imageArray)) return null;
-
-  for (let index = imageArray.length - 1; index >= 0; index--) {
-    const image = imageArray[index]?.["#text"]?.trim();
-    if (image) return image;
-  }
-
-  return null;
-};
+let friendsCache = null;
+let friendsCacheExpiresAt = 0;
+let friendsInFlight = null;
 
 async function lastFmRequest(params) {
   return fetchWithRetry(async () => {
@@ -50,39 +60,34 @@ async function lastFmRequest(params) {
   });
 }
 
-async function findBestImage(db, type, name, artistName, apiImageArray) {
+async function findBestImage(type, name, artistName, apiImages) {
   try {
-    if (type === "artist") {
-      const cachedArtist = db.prepare(`
-        SELECT artist_image
-        FROM artists
-        WHERE lower(artist) = lower(?)
-      `).get(name)?.artist_image;
-
-      if (cachedArtist) return cachedArtist;
-    } else {
-      const field = type === "album" ? "album" : "track";
-      const localImage = db.prepare(`
-        SELECT MAX(NULLIF(album_image, '')) AS album_image
-        FROM scrobbles
-        WHERE lower(${field}) = lower(?)
-          AND lower(artist) = lower(?)
-      `).get(name, artistName)?.album_image;
-
-      if (localImage) return localImage;
-    }
-
-    const apiImage = getApiImage(apiImageArray);
-    if (apiImage) return apiImage;
+    const apiImage = getLastFmImage(apiImages);
 
     if (type === "artist") {
-      return await fetchArtistImage(name) || PLACEHOLDER_IMG;
+      const cached = getCachedArtistImage(name);
+      if (cached) return cached;
+      if (apiImage) return rememberArtistImage(name, apiImage) || apiImage;
+      return await ensureArtistImage(name) || COVER_PLACEHOLDER;
     }
 
-    return await getDeezerAlbumImage(artistName, name) || PLACEHOLDER_IMG;
+    if (type === "album") {
+      const cached = getCachedAlbumCover(artistName, name);
+      if (cached) return cached;
+      if (apiImage) return rememberAlbumCover(artistName, name, apiImage) || apiImage;
+      return await ensureAlbumCover(artistName, name) || COVER_PLACEHOLDER;
+    }
+
+    const cached = getCachedTrackCover(artistName, name);
+    if (cached.image) return cached.image;
+    if (apiImage) {
+      return rememberTrackCover(artistName, name, cached.album, apiImage) || apiImage;
+    }
+
+    return await ensureTrackCover(artistName, name) || COVER_PLACEHOLDER;
   } catch (error) {
     console.warn(`Image lookup failed (${type}: ${name}):`, error.message);
-    return PLACEHOLDER_IMG;
+    return COVER_PLACEHOLDER;
   }
 }
 
@@ -115,21 +120,85 @@ function getLocalListeningMaps(db) {
     GROUP BY track, artist
   `).all();
 
+  const accumulate = (rows, getKey) => {
+    const result = new Map();
+
+    for (const item of rows) {
+      const key = getKey(item);
+      result.set(key, (result.get(key) || 0) + Number(item.plays || 0));
+    }
+
+    return result;
+  };
+
   return {
-    artists: new Map(artists.map(item => [normalizeKey(item.artist), item.plays])),
-    albums: new Map(albums.map(item => [compoundKey(item.album, item.artist), item.plays])),
-    tracks: new Map(tracks.map(item => [compoundKey(item.track, item.artist), item.plays]))
+    artists: accumulate(artists, item => normalizeKey(item.artist)),
+    albums: accumulate(albums, item => compoundKey(item.album, item.artist)),
+    tracks: accumulate(tracks, item => compoundKey(item.track, item.artist))
   };
 }
 
-async function getFriendsList(limit = 50) {
+async function fetchFriendsList(limit) {
   const response = await lastFmRequest({
     method: "user.getFriends",
     user: MAIN_USER,
     limit
   });
 
-  return normalize(response.data?.friends?.user);
+  return normalize(response.data?.friends?.user).map(friend => ({
+    name: String(friend.name || "").trim(),
+    realname: String(friend.realname || "").trim() || null,
+    avatar: toImageProxyUrl(getLastFmImage(friend.image)) || AVATAR_PLACEHOLDER,
+    playcount: Number.parseInt(friend.playcount || "0", 10),
+    url: friend.url || null
+  })).filter(friend => friend.name);
+}
+
+async function getFriendsList(limit = 50) {
+  if (friendsCache && friendsCacheExpiresAt > Date.now()) return friendsCache;
+  if (friendsInFlight) return friendsInFlight;
+
+  friendsInFlight = fetchFriendsList(limit)
+    .then(friends => {
+      friendsCache = friends;
+      friendsCacheExpiresAt = Date.now() + FRIENDS_CACHE_TTL_MS;
+      return friends;
+    })
+    .finally(() => {
+      friendsInFlight = null;
+    });
+
+  return friendsInFlight;
+}
+
+async function resolveCommonImages(rawCommonArtists, rawCommonAlbums, rawCommonTracks) {
+  const tasks = [
+    ...rawCommonArtists.slice(0, 5).map(item => ({ type: "artist", item })),
+    ...rawCommonAlbums.slice(0, 5).map(item => ({ type: "album", item })),
+    ...rawCommonTracks.slice(0, 5).map(item => ({ type: "track", item }))
+  ];
+
+  const resolved = await mapWithConcurrency(tasks, IMAGE_CONCURRENCY, async task => {
+    const { type, item } = task;
+    const artist = type === "artist" ? null : item.artist;
+
+    return {
+      type,
+      value: {
+        name: item.source.name,
+        ...(artist ? { artist } : {}),
+        myPlays: item.myPlays,
+        friendPlays: Number.parseInt(item.source.playcount || "0", 10),
+        image: toImageProxyUrl(await findBestImage(type, item.source.name, artist, item.source.image))
+      }
+    };
+  });
+
+  return {
+    commonArtists: resolved.filter(item => item.type === "artist").map(item => item.value),
+    commonAlbums: resolved.filter(item => item.type === "album").map(item => item.value),
+    commonTracks: resolved.filter(item => item.type === "track").map(item => item.value)
+  };
 }
 
 async function compareWithFriend(db, friendUsername) {
@@ -137,9 +206,9 @@ async function compareWithFriend(db, friendUsername) {
     const user = String(friendUsername || "").trim();
     if (!user) return { error: true, message: "Invalid Last.fm username." };
 
-    const params = { user, limit: 50 };
+    const params = { user, limit: 50, period: "overall" };
     const [infoRes, artistsRes, albumsRes, tracksRes] = await Promise.all([
-      lastFmRequest({ ...params, method: "user.getInfo" }),
+      lastFmRequest({ user, method: "user.getInfo" }),
       lastFmRequest({ ...params, method: "user.getTopArtists" }),
       lastFmRequest({ ...params, method: "user.getTopAlbums" }),
       lastFmRequest({ ...params, method: "user.getTopTracks" })
@@ -185,28 +254,11 @@ async function compareWithFriend(db, friendUsername) {
       .filter(item => item.myPlays > 0)
       .sort((a, b) => b.myPlays - a.myPlays);
 
-    const [commonArtists, commonAlbums, commonTracks] = await Promise.all([
-      mapWithConcurrency(rawCommonArtists.slice(0, 5), IMAGE_CONCURRENCY, async item => ({
-        name: item.source.name,
-        myPlays: item.myPlays,
-        friendPlays: Number.parseInt(item.source.playcount || "0", 10),
-        image: await findBestImage(db, "artist", item.source.name, null, item.source.image)
-      })),
-      mapWithConcurrency(rawCommonAlbums.slice(0, 5), IMAGE_CONCURRENCY, async item => ({
-        name: item.source.name,
-        artist: item.artist,
-        myPlays: item.myPlays,
-        friendPlays: Number.parseInt(item.source.playcount || "0", 10),
-        image: await findBestImage(db, "album", item.source.name, item.artist, item.source.image)
-      })),
-      mapWithConcurrency(rawCommonTracks.slice(0, 5), IMAGE_CONCURRENCY, async item => ({
-        name: item.source.name,
-        artist: item.artist,
-        myPlays: item.myPlays,
-        friendPlays: Number.parseInt(item.source.playcount || "0", 10),
-        image: await findBestImage(db, "track", item.source.name, item.artist, item.source.image)
-      }))
-    ]);
+    const { commonArtists, commonAlbums, commonTracks } = await resolveCommonImages(
+      rawCommonArtists,
+      rawCommonAlbums,
+      rawCommonTracks
+    );
 
     const myStats = db.prepare(`
       SELECT
@@ -236,7 +288,7 @@ async function compareWithFriend(db, friendUsername) {
       },
       friend: {
         username: friendData.name,
-        avatar: getApiImage(friendData.image) || PLACEHOLDER_IMG,
+        avatar: toImageProxyUrl(getLastFmImage(friendData.image)) || AVATAR_PLACEHOLDER,
         scrobbles: Number.parseInt(friendData.playcount || "0", 10),
         albumsCount: friendTotalAlbums,
         url: friendData.url

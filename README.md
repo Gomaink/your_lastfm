@@ -8,7 +8,7 @@ YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scr
 - Automatic first full sync when the database is empty.
 - Cross-process sync lock, progress reporting, retries, and a daily integrity check.
 - Dashboard with top artists, albums, tracks, daily activity, account statistics, and recent scrobbles.
-- Last.fm friends comparison with common artists, albums, and tracks.
+- Last.fm friends comparison with common artists, albums, and tracks, including resilient artwork and avatar fallbacks.
 - Standard and Instagram Story recap images generated on the server.
 - Automatic album/artist image lookup, persistent image cache, and manual album-cover uploads.
 - CSV import and streaming CSV export.
@@ -95,6 +95,7 @@ The defaults are documented in `.env.example`.
 | `LASTFM_REQUEST_DELAY_MS` | Delay between Last.fm history pages | `250` |
 | `LASTFM_REQUEST_TIMEOUT_MS` | Last.fm request timeout | `15000` |
 | `EXTERNAL_REQUEST_CONCURRENCY` | Concurrent metadata/image lookups | `4` |
+| `FRIENDS_CACHE_TTL_MS` | In-memory cache lifetime for the Last.fm friends list | `300000` |
 | `IMAGE_FAILURE_CACHE_MS` | Time before retrying an image lookup that returned nothing | `600000` |
 | `METADATA_FAILURE_CACHE_MS` | Time before retrying missing track metadata | `600000` |
 | `SHARE_IMAGE_CONCURRENCY` | Concurrent recap image loads | `4` |
