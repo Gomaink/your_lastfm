@@ -6,7 +6,7 @@ YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scr
 
 - Incremental Last.fm synchronization with a configurable overlap window.
 - Automatic first full sync when the database is empty.
-- Cross-process sync lock, progress reporting, retries, and a daily integrity check.
+- Cross-process sync lock, resumable sync windows, progress reporting, retries, and a daily integrity check.
 - Dashboard with top artists, albums, tracks, daily activity, account statistics, and recent scrobbles.
 - Last.fm friends comparison with common artists, albums, and tracks, including resilient artwork and avatar fallbacks.
 - Standard and Instagram Story recap images generated on the server.
@@ -44,7 +44,7 @@ Open:
 http://localhost:1533
 ```
 
-The API starts immediately. Synchronization runs in a separate managed process, so a large initial history import does not keep the web interface offline.
+The API starts immediately. Synchronization runs in a separate managed process, so a large initial history import does not keep the web interface offline. If a Last.fm page keeps failing after all retries, the original `from`/`to` window is persisted and retried on the next run instead of advancing past the missing page.
 
 Useful commands:
 
@@ -58,6 +58,8 @@ docker compose up -d --build
 # Stop the application without deleting ./data
 docker compose down
 ```
+
+The Docker image rebuilds `canvas` from source during every platform build. This avoids ARM64 prebuilt-library incompatibilities on Raspberry Pi 5 and other systems using 16 KB or 64 KB memory pages.
 
 Do not delete the local `data` directory unless you intentionally want to remove the SQLite database, uploaded covers, and downloaded share-image cache.
 
@@ -91,6 +93,7 @@ The defaults are documented in `.env.example`.
 | `PORT` | HTTP port | `1533` |
 | `SYNC_CRON` | Incremental sync schedule | `*/5 * * * *` |
 | `INTEGRITY_CRON` | Last.fm/local count check | `0 3 * * *` |
+| `INTEGRITY_MISSING_THRESHOLD` | Missing scrobbles required before the integrity check starts a full repair sync | `1` |
 | `SYNC_OVERLAP_SECONDS` | Re-fetch window used to safely catch late scrobbles | `86400` |
 | `LASTFM_REQUEST_DELAY_MS` | Delay between Last.fm history pages | `250` |
 | `LASTFM_REQUEST_TIMEOUT_MS` | Last.fm request timeout | `15000` |

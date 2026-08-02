@@ -7,12 +7,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libjpeg-dev \
   libpango1.0-dev \
   librsvg2-dev \
+  pkg-config \
   python3 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+
+# node-canvas prebuilds can be incompatible with ARM64 kernels that use
+# 16 KB or 64 KB memory pages. Rebuild against the target image libraries.
+RUN npm ci --omit=dev \
+  && npm rebuild canvas --build-from-source \
+  && node -e "require('canvas'); console.log('canvas native module loaded')"
 
 FROM node:22-bookworm-slim
 
@@ -21,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libgif7 \
   libjpeg62-turbo \
   libpango-1.0-0 \
+  libpangocairo-1.0-0 \
   librsvg2-2 \
   && npm install --global pm2@5.4.3 \
   && npm cache clean --force \

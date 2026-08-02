@@ -8,6 +8,7 @@ const db = require("./db");
 const { fetchWithRetry } = require("./utils/fetchRetry");
 const { assertLastFmResponse } = require("./utils/lastfmResponse");
 const { sanitizeError } = require("./utils/sanitizeAxios");
+const { parseSyncCheckpoint, resolveSyncWindow } = require("./utils/syncWindow");
 
 const CONFIG = {
   API_URL: "https://ws.audioscrobbler.com/2.0/",
@@ -20,6 +21,7 @@ const CONFIG = {
 
 const LOCK_FILE = path.join(db.dataDir, "sync.lock");
 const STATUS_KEY = "sync_status";
+const CHECKPOINT_KEY = "sync_checkpoint";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const insertScrobble = db.prepare(`
@@ -41,6 +43,11 @@ const setMetadata = db.prepare(`
 const getMetadata = db.prepare(`
   SELECT value
   FROM metadata
+  WHERE key = ?
+`);
+
+const deleteMetadata = db.prepare(`
+  DELETE FROM metadata
   WHERE key = ?
 `);
 
@@ -204,18 +211,27 @@ async function fetchLastfmPage({ page, from, to }) {
 }
 
 async function runSync(options, lock) {
-  const isFullSync = options.full === true;
-  const mode = isFullSync ? "full" : "incremental";
-  const syncStartedAt = Math.floor(Date.now() / 1000);
+  const currentTimestamp = Math.floor(Date.now() / 1000);
   const lastPlayedAt = Number(getLastPlayedAt.get()?.last || 0);
-  const from = isFullSync
-    ? 0
-    : Math.max(0, lastPlayedAt - CONFIG.OVERLAP_SECONDS);
+  const savedCheckpoint = parseSyncCheckpoint(getMetadata.get(CHECKPOINT_KEY)?.value);
+  const window = resolveSyncWindow({
+    full: options.full === true,
+    currentTimestamp,
+    lastPlayedAt,
+    overlapSeconds: CONFIG.OVERLAP_SECONDS,
+    checkpoint: savedCheckpoint
+  });
+  const isFullSync = window.mode === "full";
+  const { mode, from, to, resumed } = window;
+
+  setMetadata.run(CHECKPOINT_KEY, JSON.stringify({ mode, from, to }));
 
   console.log(
-    isFullSync
-      ? "🔄 Starting FULL sync with Last.fm..."
-      : `🔄 Starting incremental sync from ${from || "the beginning"}...`
+    resumed
+      ? `↩️ Resuming ${mode} sync window from ${from} to ${to}...`
+      : isFullSync
+        ? "🔄 Starting FULL sync with Last.fm..."
+        : `🔄 Starting incremental sync from ${from || "the beginning"}...`
   );
 
   let totalInserted = 0;
@@ -232,11 +248,14 @@ async function runSync(options, lock) {
     inserted: 0,
     skipped: 0,
     startedAt,
-    message: "Connecting to Last.fm..."
+    resumed,
+    from,
+    to,
+    message: resumed ? "Resuming interrupted synchronization..." : "Connecting to Last.fm..."
   });
 
   try {
-    const firstPage = await fetchLastfmPage({ page: 1, from, to: syncStartedAt });
+    const firstPage = await fetchLastfmPage({ page: 1, from, to });
     const parsedTotalPages = Number.parseInt(firstPage["@attr"]?.totalPages || "1", 10);
     totalPages = Number.isInteger(parsedTotalPages) && parsedTotalPages > 0
       ? parsedTotalPages
@@ -246,7 +265,7 @@ async function runSync(options, lock) {
       currentPage = page;
       const pageData = page === 1
         ? firstPage
-        : await fetchLastfmPage({ page, from, to: syncStartedAt });
+        : await fetchLastfmPage({ page, from, to });
 
       const tracks = Array.isArray(pageData.track)
         ? pageData.track
@@ -268,6 +287,9 @@ async function runSync(options, lock) {
         inserted: totalInserted,
         skipped: totalSkipped,
         startedAt,
+        resumed,
+        from,
+        to,
         message: `Syncing page ${page} of ${totalPages} (${percent}%)`
       });
 
@@ -281,6 +303,7 @@ async function runSync(options, lock) {
     }
 
     const finishedAt = Date.now();
+    deleteMetadata.run(CHECKPOINT_KEY);
     setMetadata.run("last_sync", String(finishedAt));
     saveSyncStatus({
       running: false,
@@ -291,6 +314,9 @@ async function runSync(options, lock) {
       skipped: totalSkipped,
       startedAt,
       finishedAt,
+      resumed,
+      from,
+      to,
       message: `Sync completed with ${totalInserted} new scrobbles`
     });
 
@@ -302,7 +328,10 @@ async function runSync(options, lock) {
       mode,
       totalPages,
       inserted: totalInserted,
-      skipped: totalSkipped
+      skipped: totalSkipped,
+      resumed,
+      from,
+      to
     };
   } catch (error) {
     saveSyncStatus({
@@ -314,7 +343,10 @@ async function runSync(options, lock) {
       skipped: totalSkipped,
       startedAt,
       failedAt: Date.now(),
-      message: error.message || "Sync failed",
+      resumed,
+      from,
+      to,
+      message: `${error.message || "Sync failed"}. The same sync window will be retried.`,
       error: true
     });
     throw error;
