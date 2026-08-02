@@ -18,5 +18,8 @@ services:
           ignore:
             - node_modules/
             - data/
+            - .git/
         - action: rebuild
           path: package.json
+        - action: rebuild
+          path: package-lock.json

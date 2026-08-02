@@ -1,3 +1,6 @@
+import { fetchJSON } from "./api.js";
+import { escapeAttribute, escapeHTML, safeImageUrl } from "./dom.js";
+
 let currentPage = 1;
 let loading = false;
 
@@ -5,66 +8,69 @@ export async function loadScrobbles(reset = true) {
   if (loading) return;
   loading = true;
 
-  const btn = document.getElementById("load-more-scrobbles");
+  const button = document.getElementById("load-more-scrobbles");
+  const container = document.getElementById("scrobbles-list");
 
   if (reset) {
     currentPage = 1;
-    btn.classList.add("d-none");
+    button.classList.add("d-none");
+    container.innerHTML = "";
   }
 
-  const res = await fetch(`/api/recent-scrobbles?page=${currentPage}`);
-  const data = await res.json();
+  button.disabled = true;
 
-  const scrobbles = data.tracks || [];
-  const container = document.getElementById("scrobbles-list");
+  try {
+    const data = await fetchJSON(`/api/recent-scrobbles?page=${currentPage}`, {
+      cache: "no-store"
+    });
 
-  if (reset) container.innerHTML = "";
-
-  for (const s of scrobbles) {
-    container.innerHTML += `
+    const html = (data.tracks || []).map(scrobble => `
       <div class="scrobble-item">
         <div class="scrobble-cover">
-          ${
-            s.image
-              ? `<img src="${s.image || "/images/artist-placeholder.png"}" alt="${s.track}" />`
-              : `<div class="cover-placeholder"></div>`
-          }
+          ${scrobble.image
+            ? `<img
+                src="${escapeAttribute(safeImageUrl(scrobble.image))}"
+                alt="${escapeAttribute(scrobble.track)}"
+                loading="lazy"
+              />`
+            : '<div class="cover-placeholder"></div>'}
         </div>
-
         <div class="scrobble-info">
-          <div class="scrobble-track">${s.track}</div>
-          <div class="scrobble-artist">${s.artist}</div>
+          <div class="scrobble-track">${escapeHTML(scrobble.track)}</div>
+          <div class="scrobble-artist">${escapeHTML(scrobble.artist)}</div>
           <div class="scrobble-time">
-            ${s.nowPlaying ? `<i class="mdi mdi-access-point me-1 text-green"></i>Listening now` : timeAgo(s.date)}
+            ${scrobble.nowPlaying
+              ? '<i class="mdi mdi-access-point me-1 text-green"></i>Listening now'
+              : timeAgo(scrobble.date)}
           </div>
         </div>
       </div>
-    `;
-  }
+    `).join("");
 
-  if (data.hasMore) {
-    btn.classList.remove("d-none");
-  } else {
-    btn.classList.add("d-none");
+    container.insertAdjacentHTML("beforeend", html);
+    button.classList.toggle("d-none", !data.hasMore);
+    currentPage++;
+  } catch (error) {
+    console.error("Error loading scrobbles:", error);
+    if (reset) {
+      container.innerHTML = `<p class="text-danger">${escapeHTML(error.message)}</p>`;
+    }
+  } finally {
+    loading = false;
+    button.disabled = false;
   }
-
-  currentPage++;
-  loading = false;
 }
 
-document
-  .getElementById("load-more-scrobbles")
-  .addEventListener("click", () => {
-    loadScrobbles(false);
-  });
+document.getElementById("load-more-scrobbles")?.addEventListener("click", () => {
+  loadScrobbles(false);
+});
 
-function timeAgo(ts) {
-  if (!ts) return "";
+function timeAgo(timestamp) {
+  if (!timestamp) return "";
 
-  const diff = Math.floor((Date.now() - ts) / 1000);
-
-  if (diff < 60) return "just now"; 
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`; 
+  const diff = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
-  return `${Math.floor(diff / 86400)} days ago`; 
+  return `${Math.floor(diff / 86400)} days ago`;
 }

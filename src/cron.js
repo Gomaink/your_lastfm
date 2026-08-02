@@ -1,6 +1,10 @@
 require("dotenv").config();
+
 const cron = require("node-cron");
+
+const db = require("./db");
 const { sync } = require("./sync");
+const { verifyIntegrity } = require("./integrity-check");
 
 let running = false;
 
@@ -9,11 +13,17 @@ async function runSync() {
 
   running = true;
   try {
-    console.log("Sync started...");
-    await sync();
-    console.log("✅ Sync completed");
-  } catch (err) {
-    console.error("❌ Sync error:", err);
+    const count = db.prepare("SELECT COUNT(*) AS count FROM scrobbles").get().count;
+    const result = await sync({ full: count === 0 });
+
+    if (result.started === false) {
+      console.log("⏭️ Sync already running in another process");
+      return;
+    }
+
+    console.log("✅ Scheduled sync completed");
+  } catch (error) {
+    console.error("❌ Scheduled sync error:", error.message || error);
   } finally {
     running = false;
   }
@@ -21,5 +31,5 @@ async function runSync() {
 
 runSync();
 
-cron.schedule("*/5 * * * *", runSync);
-
+cron.schedule(process.env.SYNC_CRON || "*/5 * * * *", runSync);
+cron.schedule(process.env.INTEGRITY_CRON || "0 3 * * *", verifyIntegrity);

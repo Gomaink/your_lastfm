@@ -1,52 +1,68 @@
-const getActiveFilter = (query) => {
-  const { year, month, range } = query;
-  let where = "";
-  const params = [];
+const { getDateRange } = require("./dateRange");
 
-  if (range) {
-    const now = new Date();
-    const past = new Date();
-    let isValidRange = true;
+const ALLOWED_RANGES = new Set(["day", "week", "month", "year"]);
 
-    switch (range) {
-      case 'day':
-        past.setDate(now.getDate() - 1);
-        break;
-      case 'week':
-        past.setDate(now.getDate() - 7);
-        break;
-      case 'month':
-        past.setMonth(now.getMonth() - 1);
-        break;
-      case 'year':
-        past.setFullYear(now.getFullYear() - 1);
-        break;
-      default:
-        isValidRange = false;
-    }
+function invalidFilter(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  throw error;
+}
 
-    if (isValidRange) {
-      where = "played_at >= ?";
-      params.push(Math.floor(past.getTime() / 1000));
-      return { where, params };
-    }
+function parseMonth(month) {
+  if (month === undefined || month === null || month === "") return null;
+
+  const rawMonth = String(month);
+  if (!/^(?:0?[1-9]|1[0-2])$/.test(rawMonth)) invalidFilter("Invalid month filter");
+  return Number(rawMonth);
+}
+
+function parseYear(year) {
+  if (year === undefined || year === null || year === "") return null;
+
+  const parsed = Number.parseInt(year, 10);
+  if (!/^\d{4}$/.test(String(year)) || parsed < 1970 || parsed > 9999) {
+    invalidFilter("Invalid year filter");
+  }
+  return parsed;
+}
+
+const getActiveFilter = (query = {}) => {
+  const rawRange = String(query.range || "").trim();
+  const parsedYear = parseYear(query.year);
+  const parsedMonth = parseMonth(query.month);
+
+  if (rawRange) {
+    if (!ALLOWED_RANGES.has(rawRange)) invalidFilter("Invalid range filter");
+
+    const { from, to } = getDateRange(rawRange);
+    return {
+      where: "played_at >= ? AND played_at <= ?",
+      params: [
+        Math.floor(from.getTime() / 1000),
+        Math.floor(to.getTime() / 1000)
+      ]
+    };
   }
 
-  const cleanYear = year ? String(year).split('?')[0] : null;
-  const cleanMonth = month ? String(month).split('?')[0] : null;
-
-  if (cleanYear) {
-    where += "strftime('%Y', played_at, 'unixepoch') = ?";
-    params.push(cleanYear);
+  if (parsedYear !== null) {
+    const { from, to } = getDateRange(null, parsedYear, parsedMonth);
+    return {
+      where: "played_at >= ? AND played_at <= ?",
+      params: [
+        Math.floor(from.getTime() / 1000),
+        Math.floor(to.getTime() / 1000)
+      ]
+    };
   }
 
-  if (cleanMonth) {
-    if (where) where += " AND ";
-    where += "strftime('%m', played_at, 'unixepoch') = ?";
-    params.push(cleanMonth.padStart(2, "0"));
+  if (parsedMonth !== null) {
+    return {
+      where: "strftime('%m', played_at, 'unixepoch') = ?",
+      params: [String(parsedMonth).padStart(2, "0")]
+    };
   }
 
-  return { where: where || null, params };
+  return { where: null, params: [] };
 };
 
 module.exports = { getActiveFilter };

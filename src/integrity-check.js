@@ -1,44 +1,47 @@
-const axios = require('axios');
-const db = require('./db');
-const { sync } = require('./sync');
+require("dotenv").config();
+
+const axios = require("axios");
+
+const db = require("./db");
+const { sync } = require("./sync");
+const { fetchWithRetry } = require("./utils/fetchRetry");
+const { assertLastFmResponse } = require("./utils/lastfmResponse");
+const { sanitizeError } = require("./utils/sanitizeAxios");
 
 async function verifyIntegrity() {
-    const response = await axios.get(
-        'https://ws.audioscrobbler.com/2.0/',
-        {
-            params: {
-                method: 'user.getInfo',
-                user: process.env.LASTFM_USERNAME,
-                api_key: process.env.LASTFM_API_KEY,
-                format: 'json'
-            }
+  try {
+    const response = await fetchWithRetry(async () => {
+      const result = await axios.get("https://ws.audioscrobbler.com/2.0/", {
+        timeout: Number(process.env.LASTFM_REQUEST_TIMEOUT_MS || 15000),
+        params: {
+          method: "user.getInfo",
+          user: process.env.LASTFM_USERNAME,
+          api_key: process.env.LASTFM_API_KEY,
+          format: "json"
         }
-    );
+      });
+      assertLastFmResponse(result.data);
+      return result;
+    });
 
-    const lastfmCount =
-        parseInt(response.data.user.playcount);
-
-    const localCount =
-        db.prepare(
-            'SELECT COUNT(*) as c FROM scrobbles'
-        ).get().c;
-
-    const diff =
-        Math.abs(lastfmCount - localCount);
+    const lastfmCount = Number.parseInt(response.data?.user?.playcount || "0", 10);
+    const localCount = db.prepare("SELECT COUNT(*) AS count FROM scrobbles").get().count;
+    const missingLocally = Math.max(0, lastfmCount - localCount);
 
     console.log(
-        `[Integrity] LastFM=${lastfmCount} Local=${localCount} Diff=${diff}`
+      `[Integrity] LastFM=${lastfmCount} Local=${localCount} Missing locally=${missingLocally}`
     );
 
-    if (diff > 25) {
-        console.log(
-            '[Integrity] Difference detected, running full sync'
-        );
-
-        await sync({ full: true });
+    if (missingLocally > 25) {
+      console.log("[Integrity] Missing history detected, running full sync");
+      return sync({ full: true });
     }
+
+    return { checked: true, missingLocally };
+  } catch (error) {
+    console.error("[Integrity check error]", sanitizeError(error));
+    return { checked: false, error: error.message };
+  }
 }
 
-module.exports = {
-    verifyIntegrity
-};
+module.exports = { verifyIntegrity };

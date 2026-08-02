@@ -1,65 +1,110 @@
+let initialized = false;
+let currentImageUrl = null;
+let activeController = null;
+
+function setLoading(elements, loading) {
+  elements.shareLoading.classList.toggle("d-none", !loading);
+  elements.btnGenerate.disabled = loading;
+}
+
+async function getErrorMessage(response) {
+  try {
+    const data = await response.json();
+    return data.error || "Generation failed";
+  } catch {
+    return `Generation failed (${response.status})`;
+  }
+}
+
 export function initSharePage() {
-    const btnGenerate = document.getElementById('btn-generate');
-    const shareResult = document.getElementById('share-result');
-    const shareLoading = document.getElementById('share-loading');
-    const sharePlaceholder = document.getElementById('share-placeholder');
-    const btnDownload = document.getElementById('btn-download');
+  if (initialized) return;
 
-    if (!btnGenerate) return;
+  const elements = {
+    btnGenerate: document.getElementById("btn-generate"),
+    shareResult: document.getElementById("share-result"),
+    shareLoading: document.getElementById("share-loading"),
+    sharePlaceholder: document.getElementById("share-placeholder"),
+    btnDownload: document.getElementById("btn-download"),
+    shareError: document.getElementById("share-error")
+  };
 
-    btnGenerate.addEventListener('click', async () => {
-        const period = document.getElementById('share-period').value;
-        
-        const formatElement = document.querySelector('input[name="format-option"]:checked');
-        const format = formatElement ? formatElement.value : 'standard';
+  if (!elements.btnGenerate) return;
+  initialized = true;
 
-        const types = [];
-        if(document.getElementById('check-albums').checked) types.push('albums');
-        if(document.getElementById('check-artists').checked) types.push('artists');
-        if(document.getElementById('check-tracks').checked) types.push('tracks');
+  elements.btnGenerate.addEventListener("click", async () => {
+    const period = document.getElementById("share-period").value;
+    const formatElement = document.querySelector('input[name="format-option"]:checked');
+    const format = formatElement?.value || "standard";
+    const types = [];
 
-        if(types.length === 0) {
-            alert("Please select at least one item to display.");
-            return;
-        }
+    if (document.getElementById("check-albums").checked) types.push("albums");
+    if (document.getElementById("check-artists").checked) types.push("artists");
+    if (document.getElementById("check-tracks").checked) types.push("tracks");
 
-        sharePlaceholder.classList.add('d-none');
-        shareResult.classList.add('d-none');
-        btnDownload.classList.add('d-none');
-        shareLoading.classList.remove('d-none');
-        btnGenerate.disabled = true;
+    if (!types.length) {
+      elements.shareError.textContent = "Please select at least one item to display.";
+      elements.shareError.classList.remove("d-none");
+      return;
+    }
 
-        try {
-            const queryParams = new URLSearchParams({
-                period: period,
-                types: types.join(','),
-                format: format
-            });
+    activeController?.abort();
+    activeController = new AbortController();
+    const timeout = setTimeout(() => activeController.abort(), 120000);
 
-            const response = await fetch(`/api/generate-share?${queryParams}`);
-            
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Generation failed');
-            }
+    elements.sharePlaceholder.classList.add("d-none");
+    elements.shareResult.classList.add("d-none");
+    elements.btnDownload.classList.add("d-none");
+    elements.shareError.classList.add("d-none");
+    elements.shareError.textContent = "";
+    setLoading(elements, true);
 
-            const blob = await response.blob();
-            const imageUrl = URL.createObjectURL(blob);
+    try {
+      const queryParams = new URLSearchParams({
+        period,
+        types: types.join(","),
+        format
+      });
 
-            shareResult.src = imageUrl;
-            shareResult.classList.remove('d-none');
-            
-            btnDownload.href = imageUrl;
-            btnDownload.download = `my-music-${period}-${format}.png`;
-            btnDownload.classList.remove('d-none');
+      const response = await fetch(`/api/generate-share?${queryParams}`, {
+        signal: activeController.signal,
+        cache: "no-store"
+      });
 
-        } catch (error) {
-            console.error(error);
-            alert("Error: " + error.message);
-            sharePlaceholder.classList.remove('d-none');
-        } finally {
-            shareLoading.classList.add('d-none');
-            btnGenerate.disabled = false;
-        }
-    });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response));
+      }
+
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("The server returned an invalid image");
+      }
+
+      if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
+      currentImageUrl = URL.createObjectURL(blob);
+
+      elements.shareResult.src = currentImageUrl;
+      elements.shareResult.classList.remove("d-none");
+      elements.btnDownload.href = currentImageUrl;
+      elements.btnDownload.download = `my-music-${period}-${format}.png`;
+      elements.btnDownload.classList.remove("d-none");
+    } catch (error) {
+      console.error("Share generation error:", error);
+      const message = error.name === "AbortError"
+        ? "The image took too long to generate. Please try again."
+        : error.message;
+
+      elements.shareError.textContent = message;
+      elements.shareError.classList.remove("d-none");
+      elements.sharePlaceholder.classList.remove("d-none");
+    } finally {
+      clearTimeout(timeout);
+      activeController = null;
+      setLoading(elements, false);
+    }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    activeController?.abort();
+    if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
+  });
 }

@@ -1,49 +1,44 @@
+function redactApiKey(value) {
+  return String(value || "").replace(/api_key=[^&\s]*/gi, "api_key=***REDACTED***");
+}
+
 function sanitizeAxiosConfig(config) {
   if (!config) return config;
 
-  // Redact API key from params
-  if (config.params?.api_key) {
-    config = {
-      ...config,
-      params: {
-        ...config.params,
-        api_key: "***REDACTED***"
-      }
+  const sanitized = { ...config };
+
+  if (config.params) {
+    sanitized.params = {
+      ...config.params,
+      ...(config.params.api_key ? { api_key: "***REDACTED***" } : {})
     };
   }
 
-  // Redact API key from URL if present
-  if (config.url) {
-    config.url = config.url.replace(
-      /api_key=[^&]*/g,
-      'api_key=***REDACTED***'
-    );
-  }
-
-  return config;
+  if (config.url) sanitized.url = redactApiKey(config.url);
+  return sanitized;
 }
 
 function sanitizeError(error) {
   if (!error) return error;
 
-  const sanitized = { ...error };
+  const sanitized = {
+    name: error.name || "Error",
+    message: redactApiKey(error.message || String(error)),
+    code: error.code,
+    status: error.status || error.statusCode,
+    stack: error.stack ? redactApiKey(error.stack) : undefined
+  };
 
-  // Redact from error message
-  if (sanitized.message) {
-    sanitized.message = sanitized.message.replace(
-      /api_key=[^&\s]*/g,
-      'api_key=***REDACTED***'
-    );
-  }
+  if (error.config) sanitized.config = sanitizeAxiosConfig(error.config);
 
-  // Redact from config
-  if (sanitized.config) {
-    sanitized.config = sanitizeAxiosConfig(sanitized.config);
-  }
-
-  // Redact from response
-  if (sanitized.response?.config) {
-    sanitized.response.config = sanitizeAxiosConfig(sanitized.response.config);
+  if (error.response) {
+    sanitized.response = {
+      status: error.response.status,
+      statusText: error.response.statusText,
+      data: error.response.data,
+      headers: error.response.headers,
+      config: sanitizeAxiosConfig(error.response.config)
+    };
   }
 
   return sanitized;

@@ -1404,4 +1404,28 @@ strong {
 
 .very-low {
   color: #6b4a2b;
-} 
+}
+
+/* Review fixes */
+.friend-card {
+    appearance: none;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.common-img-wrap {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #222;
+}
+
+.common-img-wrap .cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

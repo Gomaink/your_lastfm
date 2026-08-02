@@ -1,196 +1,218 @@
-import { renderCover, initCoverUploads } from "./coverUploader.js";
-const PLACEHOLDER_AVATAR = '/images/artist-placeholder.png';
+import { fetchJSON } from "./api.js";
+import { escapeAttribute, escapeHTML, safeImageUrl } from "./dom.js";
+
+const PLACEHOLDER_AVATAR = "/images/artist-placeholder.png";
 
 function showLoading() {
-  const loader = document.getElementById('global-loading-friends');
-  if (loader) loader.style.display = 'flex';
+  const loader = document.getElementById("global-loading-friends");
+  if (loader) loader.style.display = "flex";
 }
 
 function hideLoading() {
-  const loader = document.getElementById('global-loading-friends');
-  if (loader) loader.style.display = 'none';
+  const loader = document.getElementById("global-loading-friends");
+  if (loader) loader.style.display = "none";
 }
 
+function getApiImage(images) {
+  if (!Array.isArray(images)) return PLACEHOLDER_AVATAR;
+
+  for (let index = images.length - 1; index >= 0; index--) {
+    const image = images[index]?.["#text"];
+    if (image) return safeImageUrl(image, PLACEHOLDER_AVATAR);
+  }
+
+  return PLACEHOLDER_AVATAR;
+}
 
 export async function loadFriends() {
-    const container = document.getElementById('friends-view');
-    
-    container.innerHTML = '<div class="text-center p-5">Loading friends list...</div>';
-    
-    try {
-        const res = await fetch('/api/friends');
-        const friends = await res.json();
-        renderFriendsList(friends, container);
-    } catch (err) {
-        container.innerHTML = '<p class="text-danger text-center">Error loading friends.</p>';
-    }
+  const container = document.getElementById("friends-view");
+  container.innerHTML = '<div class="text-center p-5">Loading friends list...</div>';
+
+  try {
+    const friends = await fetchJSON("/api/friends", { cache: "no-store" });
+    renderFriendsList(friends, container);
+  } catch (error) {
+    container.innerHTML = `<p class="text-danger text-center">${escapeHTML(error.message)}</p>`;
+  }
 }
 
 function renderFriendsList(friends, container) {
-    container.innerHTML = `
-        <h2 class="section-title mb-4 ps-3">Friends (${friends.length})</h2>
-        <div class="friends-grid ps-3 pe-3">
-             ${friends.map(friend => {
-                const avatar = friend.image[2]['#text'] || PLACEHOLDER_AVATAR;
-                return `
-                <div class="friend-card shadow-sm" data-user="${friend.name}">
-                    <img src="${avatar}" alt="${friend.name}" class="friend-avatar" onerror="this.src='${PLACEHOLDER_AVATAR}'">
-                    <div class="friend-info">
-                        <strong>${friend.name}</strong>
-                    </div>
-                </div>`;
-            }).join('')}
-        </div>
-        <div id="comparison-container" class="d-none p-3"></div>
-    `;
+  container.innerHTML = `
+    <h2 class="section-title mb-4 ps-3">Friends (${friends.length})</h2>
+    <div class="friends-grid ps-3 pe-3">
+      ${friends.map(friend => {
+        const avatar = getApiImage(friend.image);
+        return `
+          <button class="friend-card shadow-sm" data-user="${escapeAttribute(friend.name)}" type="button">
+            <img
+              src="${escapeAttribute(avatar)}"
+              alt="${escapeAttribute(friend.name)}"
+              class="friend-avatar"
+              loading="lazy"
+            />
+            <div class="friend-info">
+              <strong>${escapeHTML(friend.name)}</strong>
+            </div>
+          </button>
+        `;
+      }).join("")}
+    </div>
+    <div id="comparison-container" class="d-none p-3"></div>
+  `;
 
-    document.querySelectorAll('.friend-card').forEach(card => {
-        card.addEventListener('click', () => loadComparison(card.dataset.user));
-    });
+  container.querySelectorAll(".friend-card").forEach(card => {
+    card.addEventListener("click", () => loadComparison(card.dataset.user));
+  });
 }
 
 async function loadComparison(friendUsername) {
-    const container = document.getElementById('comparison-container');
-    const grid = document.querySelector('.friends-grid');
-    const title = document.querySelector('.section-title');
+  const view = document.getElementById("friends-view");
+  const container = document.getElementById("comparison-container");
+  const grid = view.querySelector(".friends-grid");
+  const title = view.querySelector(".section-title");
 
-    grid.classList.add('d-none');
-    title.classList.add('d-none');
-    
-    container.classList.remove('d-none');
-    container.innerHTML = '';
-    showLoading();
+  grid?.classList.add("d-none");
+  title?.classList.add("d-none");
+  container.classList.remove("d-none");
+  container.innerHTML = "";
+  showLoading();
 
-    try {
-        const res = await fetch(`/api/friends/compare/${friendUsername}`);
-        const data = await res.json();
-        
-        hideLoading();
-        renderComparison(data, container);
-    } catch (err) {
-        hideLoading();
-        console.error(err);
-        container.innerHTML = '<p class="text-danger">Error loading comparison.</p><button class="btn-back">Back</button>';
-        container.querySelector('.btn-back').addEventListener('click', backToList);
-    }
+  try {
+    const data = await fetchJSON(`/api/friends/compare/${encodeURIComponent(friendUsername)}`, {
+      cache: "no-store"
+    });
+    renderComparison(data, container);
+  } catch (error) {
+    container.innerHTML = `
+      <p class="text-danger">${escapeHTML(error.message)}</p>
+      <button class="btn-back" type="button">Back</button>
+    `;
+    container.querySelector(".btn-back")?.addEventListener("click", backToList);
+  } finally {
+    hideLoading();
+  }
+}
+
+function renderCommonItem(item, friendUsername) {
+  return `
+    <div class="common-item">
+      <div class="common-img-wrap">
+        <img
+          src="${escapeAttribute(safeImageUrl(item.image))}"
+          alt="${escapeAttribute(item.name)}"
+          class="cover-img"
+          loading="lazy"
+        />
+      </div>
+      <div class="common-info">
+        <strong>${escapeHTML(item.name)}</strong>
+        ${item.artist ? `<small>${escapeHTML(item.artist)}</small>` : ""}
+        <div class="common-counts">
+          <span class="text-orange">You: ${Number(item.myPlays).toLocaleString("pt-BR")}</span>
+          <span class="text-secondary"> | ${escapeHTML(friendUsername)}: ${Number(item.friendPlays).toLocaleString("pt-BR")}</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderComparison(data, container) {
-    if (data.error) {
-        container.innerHTML = `<p>${data.message}</p><button class="btn-back">Back</button>`;
-        container.querySelector('.btn-back').addEventListener('click', backToList);
-        return;
-    }
+  const { user, friend, commonArtists, commonAlbums, commonTracks, compatibilityScore } = data;
+  const format = number => new Intl.NumberFormat("pt-BR").format(number || 0);
+  const compatibility = getCompatibilityStatus(compatibilityScore || 0);
+  const myAvatar = safeImageUrl(
+    document.querySelector(".profile-avatar img")?.src,
+    PLACEHOLDER_AVATAR
+  );
 
-    const { user, friend, commonArtists, commonAlbums, commonTracks, compatibilityScore } = data;
-    const fmt = new Intl.NumberFormat('pt-BR').format;
-    const compStatus = getCompatibilityStatus(compatibilityScore || 0);
-    const myAvatarImg = document.querySelector('.profile-avatar img')?.src || PLACEHOLDER_AVATAR;
+  container.innerHTML = `
+    <button class="btn-back mb-4" type="button">← Back</button>
 
-    const renderCommonItem = (item, type) => {
-        const coverHTML = renderCover({
-            image: item.image,
-            artist: item.artist || item.name,
-            album: item.name, 
-            size: 'large'
-        });
-
-        return `
-            <div class="common-item">
-                <div class="common-img-wrap">
-                    ${coverHTML}
-                </div>
-                <div class="common-info">
-                    <strong>${item.name}</strong>
-                    ${item.artist ? `<small>${item.artist}</small>` : ''}
-                    <div class="common-counts">
-                        <span class="text-orange">You: ${fmt(item.myPlays)}</span>
-                        <span class="text-secondary"> | ${friend.username}: ${fmt(item.friendPlays)}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    };
-
-    container.innerHTML = `
-        <button class="btn-back mb-4">← Back</button>
-
-        <div class="comparison-header text-center">
-            <h2>${user.username} <span class="text-muted fs-5">vs</span> ${friend.username}</h2>
-            <div class="avatars-vs">
-                <div class="vs-avatar-container">
-                     <img src="${myAvatarImg}" class="vs-avatar">
-                </div>
-                <span>VS</span>
-                <div class="vs-avatar-container" style="border-color: #555">
-                    <img src="${friend.avatar}" class="vs-avatar" onerror="this.src='${PLACEHOLDER_AVATAR}'">
-                </div>
-            </div>
+    <div class="comparison-header text-center">
+      <h2>${escapeHTML(user.username)} <span class="text-muted fs-5">vs</span> ${escapeHTML(friend.username)}</h2>
+      <div class="avatars-vs">
+        <div class="vs-avatar-container">
+          <img src="${escapeAttribute(myAvatar)}" class="vs-avatar" alt="Your avatar" />
         </div>
-
-        <div class="compatibility-result">
-            <div class="compatibility-label">Compatibility Level</div>
-            <div class="compatibility-status ${compStatus.css}">${compStatus.text}</div>
+        <span>VS</span>
+        <div class="vs-avatar-container" style="border-color: #555">
+          <img
+            src="${escapeAttribute(safeImageUrl(friend.avatar))}"
+            class="vs-avatar"
+            alt="${escapeAttribute(friend.username)}"
+          />
         </div>
+      </div>
+    </div>
 
-        <div class="comparison-grid">
-            <div class="comp-card">
-                <span class="comp-card-title">Total Scrobbles</span>
-                <div class="comp-card-values">
-                    <span class="val-you">${fmt(user.scrobbles)}</span>
-                    <span class="val-vs">vs</span>
-                    <span class="val-friend">${fmt(friend.scrobbles)}</span>
-                </div>
-            </div>
-            <div class="comp-card">
-                <span class="comp-card-title">Total Albums</span>
-                <div class="comp-card-values">
-                    <span class="val-you">${fmt(user.albumsCount)}</span>
-                    <span class="val-vs">vs</span>
-                    <span class="val-friend">${fmt(friend.albumsCount)}</span>
-                </div>
-            </div>
+    <div class="compatibility-result">
+      <div class="compatibility-label">Compatibility Level</div>
+      <div class="compatibility-status ${compatibility.css}">${compatibility.text}</div>
+    </div>
+
+    <div class="comparison-grid">
+      <div class="comp-card">
+        <span class="comp-card-title">Total Scrobbles</span>
+        <div class="comp-card-values">
+          <span class="val-you">${format(user.scrobbles)}</span>
+          <span class="val-vs">vs</span>
+          <span class="val-friend">${format(friend.scrobbles)}</span>
         </div>
-
-        <h3 class="mt-5 mb-4 text-center section-title">Common Interests</h3>
-
-        <div class="row">
-            <div class="col-md-4 mb-4">
-                <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Artists</h5>
-                <div class="common-list-container">
-                    ${commonArtists.length ? commonArtists.map(i => renderCommonItem(i, 'artist')).join('') : '<div class="p-3 text-muted">No artists in common in the top 50.</div>'}
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Albums</h5>
-                <div class="common-list-container">
-                    ${commonAlbums.length ? commonAlbums.map(i => renderCommonItem(i, 'album')).join('') : '<div class="p-3 text-muted">No albums in common in the top 50.</div>'}
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Tracks</h5>
-                <div class="common-list-container">
-                    ${commonTracks.length ? commonTracks.map(i => renderCommonItem(i, 'track')).join('') : '<div class="p-3 text-muted">No songs in common in the top 50.</div>'}
-                </div>
-            </div>
+      </div>
+      <div class="comp-card">
+        <span class="comp-card-title">Total Albums</span>
+        <div class="comp-card-values">
+          <span class="val-you">${format(user.albumsCount)}</span>
+          <span class="val-vs">vs</span>
+          <span class="val-friend">${format(friend.albumsCount)}</span>
         </div>
-    `;
+      </div>
+    </div>
 
-    container.querySelector('.btn-back').addEventListener('click', backToList);
-    
-    initCoverUploads();
+    <h3 class="mt-5 mb-4 text-center section-title">Common Interests</h3>
+
+    <div class="row">
+      <div class="col-md-4 mb-4">
+        <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Artists</h5>
+        <div class="common-list-container">
+          ${commonArtists.length
+            ? commonArtists.map(item => renderCommonItem(item, friend.username)).join("")
+            : '<div class="p-3 text-muted">No artists in common in the top 50.</div>'}
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Albums</h5>
+        <div class="common-list-container">
+          ${commonAlbums.length
+            ? commonAlbums.map(item => renderCommonItem(item, friend.username)).join("")
+            : '<div class="p-3 text-muted">No albums in common in the top 50.</div>'}
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h5 class="mb-3 text-uppercase fs-6 ls-1">Top Tracks</h5>
+        <div class="common-list-container">
+          ${commonTracks.length
+            ? commonTracks.map(item => renderCommonItem(item, friend.username)).join("")
+            : '<div class="p-3 text-muted">No songs in common in the top 50.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  container.querySelector(".btn-back")?.addEventListener("click", backToList);
 }
 
 function backToList() {
-    document.getElementById('comparison-container').classList.add('d-none');
-    document.querySelector('.friends-grid').classList.remove('d-none');
-    document.querySelector('.section-title').classList.remove('d-none');
+  const view = document.getElementById("friends-view");
+  document.getElementById("comparison-container")?.classList.add("d-none");
+  view.querySelector(".friends-grid")?.classList.remove("d-none");
+  view.querySelector("h2.section-title")?.classList.remove("d-none");
 }
 
 function getCompatibilityStatus(score) {
-    if (score >= 80) return { text: 'SUPER', css: 'super' };
-    if (score >= 65) return { text: 'HIGH', css: 'high' };
-    if (score >= 40) return { text: 'MEDIUM', css: 'medium' };
-    if (score >= 20) return { text: 'LOW', css: 'low' };
-    return { text: 'VERY LOW', css: 'very-low' };
+  if (score >= 80) return { text: "SUPER", css: "comp-soulmates" };
+  if (score >= 65) return { text: "HIGH", css: "comp-high" };
+  if (score >= 40) return { text: "MEDIUM", css: "comp-medium" };
+  if (score >= 20) return { text: "LOW", css: "comp-low" };
+  return { text: "VERY LOW", css: "comp-low" };
 }

@@ -1,22 +1,25 @@
 const axios = require("axios");
+const { fetchWithRetry } = require("../utils/fetchRetry");
+
+const REQUEST_TIMEOUT = Number(process.env.IMAGE_REQUEST_TIMEOUT_MS || 10000);
 
 async function fetchDeezerArtistImage(artist) {
   try {
-    const res = await axios.get("https://api.deezer.com/search/artist", {
-      params: {
-        q: artist,
-        limit: 1
-      }
-    });
+    const response = await fetchWithRetry(() =>
+      axios.get("https://api.deezer.com/search/artist", {
+        timeout: REQUEST_TIMEOUT,
+        params: { q: artist, limit: 1 }
+      }),
+      2,
+      500
+    );
 
-    const item = res.data?.data?.[0];
-
+    const item = response.data?.data?.[0];
     if (!item) return null;
 
-    return item.picture_xl || item.picture_big || null;
-
+    return item.picture_xl || item.picture_big || item.picture_medium || null;
   } catch (error) {
-    console.error(`Error searching for image on Deezer for ${artist}:`, error.message);
+    console.warn(`Deezer artist image failed for ${artist}: ${error.message}`);
     return null;
   }
 }

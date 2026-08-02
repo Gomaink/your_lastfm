@@ -1,11 +1,10 @@
 #!/bin/sh
-set -e
+set -eu
 
-mkdir -p /app/data
+mkdir -p /app/data/covers/albums /app/data/image-cache
 
-echo "🔍 Checking database state..."
-node src/initial-sync.js
+echo "🔍 Initializing database..."
+node -e "require('./src/db').close()"
 
-echo "🚀 Starting services (API + CRON)..."
-pm2 start src/api.js --name "web-api"
-exec pm2-runtime start src/cron.js --name "sync-cron"
+echo "🚀 Starting API and background synchronization..."
+exec pm2-runtime ecosystem.config.js

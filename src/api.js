@@ -1,702 +1,511 @@
-require('dotenv').config();
-const express = require("express");
-const cors = require("cors");
+require("dotenv").config();
+
 const axios = require("axios");
-const path = require("path");
+const cors = require("cors");
 const crypto = require("crypto");
-const fs = require("fs");
+const express = require("express");
+const fs = require("fs/promises");
 const multer = require("multer");
-const { createCanvas, loadImage, registerFont } = require('canvas');
-const cron = require("node-cron");
+const path = require("path");
+const { createCanvas, loadImage } = require("canvas");
 
 const db = require("./db");
-
-const { sync } = require('./sync');
-const { verifyIntegrity } = require('./integrity-check');
+const { startSync, getSyncStatus } = require("./sync");
 const { getActiveFilter } = require("./utils/filters");
 const { fillMissingDates } = require("./utils/dateRange");
+const { fetchWithRetry } = require("./utils/fetchRetry");
+const { assertLastFmResponse } = require("./utils/lastfmResponse");
+const { mapWithConcurrency } = require("./utils/mapWithConcurrency");
+const { sanitizeError } = require("./utils/sanitizeAxios");
 const { ensureAlbumCover } = require("./services/albumCoverCache");
 const { ensureArtistImage } = require("./services/artistImageCache");
 const { importScrobbleCSV } = require("./services/importScrobbleCSV");
 const { exportScrobbleCSV } = require("./services/exportScrobbleCSV");
 const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { getLastFmUserInfo } = require("./services/lastfm-username");
-const { fetchWithRetry } = require("./utils/fetchRetry");
-const { sanitizeError } = require("./utils/sanitizeAxios");
-const { getFriendsList, compareWithFriend } = require('./services/lastfm-friends');
-
+const { getFriendsList, compareWithFriend } = require("./services/lastfm-friends");
+const {
+  generateShareImage,
+  ShareGenerationBusyError
+} = require("./services/shareGenerator");
 
 const app = express();
-const PORT = process.env.PORT || 1533;
+const PORT = Math.max(1, Number(process.env.PORT) || 1533);
 const AVG_TRACK_SECONDS = 180;
-const upload = multer({ storage: multer.memoryStorage() });
+const EXTERNAL_REQUEST_CONCURRENCY = Number(process.env.EXTERNAL_REQUEST_CONCURRENCY || 4);
+const publicDir = path.join(__dirname, "../public");
+const albumCoversDir = path.join(db.dataDir, "covers/albums");
+const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "../public")));
+function asyncRoute(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
 
-app.get("/api/top-artists", async (req, res) => {
-  res.set('Cache-Control', 'no-store');
+function setNoStore(res) {
+  res.set("Cache-Control", "no-store");
+}
 
-  try {
-    const filter = getActiveFilter(req.query);
+function getUploadErrorMessage(error) {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    return "Uploaded file is too large";
+  }
 
-    // Filter  Debug
-    //console.log(`[Top Artists] Filter: "${filter.where}" | Params: ${filter.params}`);
+  return error.message || "Upload failed";
+}
 
-    const query = `
-      SELECT artist, COUNT(*) plays
-      FROM scrobbles
-      ${filter.where ? `WHERE ${filter.where}` : ""}
-      GROUP BY artist
-      ORDER BY plays DESC
-      LIMIT 10
-    `;
-
-    const rows = db.prepare(query).all(...filter.params);
-
-    for (const r of rows) {
-      try {
-        r.image = await ensureArtistImage(r.artist);
-      } catch {
-        r.image = null;
-      }
-    }
-
-    res.json(rows);
-
-  } catch (err) {
-    console.error("[ERROR Top Artists]", err);
-    res.status(500).json({ error: "Internal error" });
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, callback) => {
+    const allowed = allowedImageTypes.has(file.mimetype);
+    callback(allowed ? null : new Error("Unsupported image type"), allowed);
   }
 });
 
-app.get("/api/top-tracks", async (req, res) => {
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 }
+});
+
+const corsOrigin = process.env.CORS_ORIGIN?.trim();
+if (corsOrigin) {
+  const allowedOrigins = corsOrigin.split(",").map(origin => origin.trim()).filter(Boolean);
+  app.use(cors({ origin: allowedOrigins }));
+}
+
+app.disable("x-powered-by");
+app.use(express.json({ limit: "1mb" }));
+app.use("/covers", express.static(path.join(db.dataDir, "covers"), {
+  immutable: true,
+  maxAge: "30d"
+}));
+app.use(express.static(publicDir));
+
+app.get("/api/health", (req, res) => {
+  const database = db.prepare("SELECT 1 AS ok").get();
+  res.json({ ok: database.ok === 1, timestamp: Date.now() });
+});
+
+app.get("/api/top-artists", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const filter = getActiveFilter(req.query);
+
+  const rows = db.prepare(`
+    SELECT artist, COUNT(*) AS plays
+    FROM scrobbles
+    ${filter.where ? `WHERE ${filter.where}` : ""}
+    GROUP BY artist
+    ORDER BY plays DESC
+    LIMIT 10
+  `).all(...filter.params);
+
+  const result = await mapWithConcurrency(rows, EXTERNAL_REQUEST_CONCURRENCY, async row => ({
+    ...row,
+    image: await ensureArtistImage(row.artist).catch(() => null)
+  }));
+
+  res.json(result);
+}));
+
+app.get("/api/top-tracks", asyncRoute(async (req, res) => {
+  setNoStore(res);
   const filter = getActiveFilter(req.query);
 
   const rows = db.prepare(`
     SELECT
-      track, artist, album, album_image,
-      COUNT(*) plays
+      track,
+      artist,
+      album,
+      MAX(NULLIF(album_image, '')) AS album_image,
+      COUNT(*) AS plays
     FROM scrobbles
     WHERE album IS NOT NULL
-    ${filter.where ? `AND ${filter.where}` : ""}
+      AND TRIM(album) != ''
+      ${filter.where ? `AND ${filter.where}` : ""}
     GROUP BY track, artist, album
     ORDER BY plays DESC
     LIMIT 20
-  `).all(...(filter.params || []));
+  `).all(...filter.params);
 
-  for (const row of rows) {
-    const duration = await ensureTrackDuration(row.artist, row.track);
-    row.total_seconds = duration * row.plays;
+  const result = await mapWithConcurrency(rows, EXTERNAL_REQUEST_CONCURRENCY, async row => {
+    const [duration, albumImage] = await Promise.all([
+      ensureTrackDuration(row.artist, row.track),
+      row.album_image
+        ? Promise.resolve(row.album_image)
+        : ensureAlbumCover(row.artist, row.album)
+    ]);
 
-    if (!row.album_image) {
-      row.album_image = await ensureAlbumCover(row.artist, row.album);
-    }
+    return {
+      ...row,
+      album_image: albumImage,
+      total_seconds: duration * row.plays
+    };
+  });
+
+  res.json(result);
+}));
+
+app.get("/api/last-sync", (req, res) => {
+  setNoStore(res);
+  const row = db.prepare(`
+    SELECT value
+    FROM metadata
+    WHERE key = 'last_sync'
+  `).get();
+
+  res.json({
+    timestamp: Number(row?.value || 0),
+    status: getSyncStatus()
+  });
+});
+
+app.get("/api/sync/status", (req, res) => {
+  setNoStore(res);
+  res.json(getSyncStatus());
+});
+
+app.post("/api/sync", asyncRoute(async (req, res) => {
+  const task = startSync({ full: req.query.full === "true" });
+
+  if (!task.started) {
+    return res.status(409).json({
+      success: false,
+      running: true,
+      status: task.status
+    });
   }
 
-  res.json(rows);
-});
+  task.promise.catch(error => {
+    console.error("Manual sync failed:", sanitizeError(error));
+  });
 
-app.get('/api/last-sync', (req, res) => {
-    const row = db.prepare(`
-        SELECT value
-        FROM metadata
-        WHERE key = 'last_sync'
-    `).get();
-
-    res.json({
-        timestamp: Number(row?.value || 0)
-    });
-});
-
-app.post('/api/sync', async (req, res) => {
-    sync()
-        .then(() => console.log('Manual sync finished'))
-        .catch(console.error);
-
-    res.json({
-        success: true
-    });
-});
+  res.status(202).json({
+    success: true,
+    running: true,
+    status: getSyncStatus()
+  });
+}));
 
 app.get("/api/plays-per-day", (req, res) => {
+  setNoStore(res);
   const filter = getActiveFilter(req.query);
 
   const rows = db.prepare(`
     SELECT
-      date(played_at, 'unixepoch') day,
-      COUNT(*) plays
+      date(played_at, 'unixepoch') AS day,
+      COUNT(*) AS plays
     FROM scrobbles
     ${filter.where ? `WHERE ${filter.where}` : ""}
     GROUP BY day
     ORDER BY day
-  `).all(...(filter.params || []));
+  `).all(...filter.params);
 
-  const result = fillMissingDates(rows, req.query.range, req.query.year, req.query.month);
-  res.json(result);
+  res.json(fillMissingDates(rows, req.query.range, req.query.year, req.query.month));
 });
 
 app.get("/api/summary", (req, res) => {
+  setNoStore(res);
   const filter = getActiveFilter(req.query);
 
   const row = db.prepare(`
     SELECT
-      COUNT(*) totalPlays,
-      COUNT(DISTINCT date(played_at, 'unixepoch')) days
+      COUNT(*) AS totalPlays,
+      COUNT(DISTINCT date(played_at, 'unixepoch')) AS days,
+      COALESCE(SUM(COALESCE(track_duration, ?)), 0) AS totalSeconds
     FROM scrobbles
     ${filter.where ? `WHERE ${filter.where}` : ""}
-  `).get(...(filter.params || []));
-
-  const totalMinutes = Math.round((row.totalPlays * AVG_TRACK_SECONDS) / 60);
-  const avgPerDay = row.days ? (row.totalPlays / row.days).toFixed(1) : 0;
+  `).get(AVG_TRACK_SECONDS, ...filter.params);
 
   res.json({
     totalPlays: row.totalPlays,
-    totalMinutes,
-    avgPerDay
+    totalMinutes: Math.round(row.totalSeconds / 60),
+    avgPerDay: row.days ? (row.totalPlays / row.days).toFixed(1) : "0"
   });
 });
 
-app.get("/api/top-albums", async (req, res) => {
+app.get("/api/top-albums", asyncRoute(async (req, res) => {
+  setNoStore(res);
   const filter = getActiveFilter(req.query);
-  const filterClause = filter.where ? `AND ${filter.where}` : '';
 
   const albums = db.prepare(`
-    SELECT artist, album, album_image, COUNT(*) plays
+    SELECT
+      artist,
+      album,
+      MAX(NULLIF(album_image, '')) AS album_image,
+      COUNT(*) AS plays
     FROM scrobbles
     WHERE album IS NOT NULL
-    ${filterClause}
+      AND TRIM(album) != ''
+      ${filter.where ? `AND ${filter.where}` : ""}
     GROUP BY artist, album
     ORDER BY plays DESC
     LIMIT 12
-  `).all(...(filter.params || []));
+  `).all(...filter.params);
 
-  for (const a of albums) {
-    if (!a.album_image) {
-      a.album_image = await ensureAlbumCover(a.artist, a.album);
-    }
-  }
+  const result = await mapWithConcurrency(albums, EXTERNAL_REQUEST_CONCURRENCY, async album => ({
+    ...album,
+    album_image: album.album_image || await ensureAlbumCover(album.artist, album.album)
+  }));
 
-  res.json(albums);
-});
+  res.json(result);
+}));
 
-app.post("/api/album-cover", upload.single("cover"), (req, res) => {
-  const { artist, album } = req.body;
+app.post("/api/album-cover", (req, res, next) => {
+  imageUpload.single("cover")(req, res, error => {
+    if (error) return res.status(400).json({ error: getUploadErrorMessage(error) });
+    next();
+  });
+}, asyncRoute(async (req, res) => {
+  const artist = String(req.body.artist || "").trim();
+  const album = String(req.body.album || "").trim();
 
   if (!artist || !album || !req.file) {
     return res.status(400).json({ error: "Invalid payload" });
   }
 
-  const hash = crypto
+  let sourceImage;
+  try {
+    sourceImage = await loadImage(req.file.buffer);
+  } catch {
+    return res.status(400).json({ error: "Invalid or unsupported image" });
+  }
+
+  const cropSize = Math.min(sourceImage.width, sourceImage.height);
+  const outputSize = Math.max(1, Math.min(1000, Math.floor(cropSize)));
+  const sourceX = Math.floor((sourceImage.width - cropSize) / 2);
+  const sourceY = Math.floor((sourceImage.height - cropSize) / 2);
+  const canvas = createCanvas(outputSize, outputSize);
+  const context = canvas.getContext("2d");
+
+  context.drawImage(
+    sourceImage,
+    sourceX,
+    sourceY,
+    cropSize,
+    cropSize,
+    0,
+    0,
+    outputSize,
+    outputSize
+  );
+
+  const albumHash = crypto
     .createHash("sha1")
-    .update(`${artist}::${album}`)
-    .digest("hex");
+    .update(`${artist}\u0000${album}`)
+    .digest("hex")
+    .slice(0, 24);
+  const imageBuffer = canvas.toBuffer("image/jpeg", {
+    quality: 0.9,
+    progressive: true
+  });
+  const contentHash = crypto
+    .createHash("sha1")
+    .update(imageBuffer)
+    .digest("hex")
+    .slice(0, 12);
+  const fileName = `${albumHash}-${contentHash}.jpg`;
+  const filePath = path.join(albumCoversDir, fileName);
+  const previousCover = db.prepare(`
+    SELECT MAX(NULLIF(album_image, '')) AS album_image
+    FROM scrobbles
+    WHERE artist = ? AND album = ?
+  `).get(artist, album)?.album_image;
 
-  const ext = path.extname(req.file.originalname) || ".jpg";
-  const fileName = `${hash}${ext}`;
-
-  const coversDir = path.join(__dirname, "../public/covers/albums");
-  fs.mkdirSync(coversDir, { recursive: true });
-
-  const filePath = path.join(coversDir, fileName);
-  fs.writeFileSync(filePath, req.file.buffer);
+  await fs.mkdir(albumCoversDir, { recursive: true });
+  await fs.writeFile(filePath, imageBuffer);
 
   const publicPath = `/covers/albums/${fileName}`;
-
   db.prepare(`
     UPDATE scrobbles
     SET album_image = ?
     WHERE artist = ? AND album = ?
   `).run(publicPath, artist, album);
 
-  //console.log(`Manual cover added: ${artist} - ${album}`);
+  if (previousCover?.startsWith("/covers/albums/") && previousCover !== publicPath) {
+    const previousName = path.basename(previousCover);
+    await fs.rm(path.join(albumCoversDir, previousName), { force: true });
+  }
 
   res.json({ image: publicPath });
-});
+}));
 
 app.post("/api/album-tracks", (req, res) => {
-  const { artist, album } = req.body;
+  const artist = String(req.body.artist || "").trim();
+  const album = String(req.body.album || "").trim();
 
   if (!artist || !album) {
     return res.status(400).json({ error: "Invalid payload" });
   }
 
   const filter = getActiveFilter(req.query);
-  const filterClause = filter.where ? `AND ${filter.where}` : '';
-
   const tracks = db.prepare(`
-    SELECT track, COUNT(*) plays
+    SELECT track, COUNT(*) AS plays
     FROM scrobbles
     WHERE album = ?
-    AND artist = ?
-    ${filterClause}
+      AND artist = ?
+      ${filter.where ? `AND ${filter.where}` : ""}
     GROUP BY track
     ORDER BY plays DESC
-  `).all(album, artist, ...(filter.params || []));
+  `).all(album, artist, ...filter.params);
 
   res.json(tracks);
-})
+});
 
-app.get("/api/recent-scrobbles", async (req, res) => {
-  try {
-    const page = Number(req.query.page || 1);
-    const limit = 20;
+app.get("/api/recent-scrobbles", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const parsedPage = Number.parseInt(req.query.page || "1", 10);
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = 20;
 
-    const response = await fetchWithRetry(() =>
-      axios.get("https://ws.audioscrobbler.com/2.0/", { params: {
+  const response = await fetchWithRetry(async () => {
+    const result = await axios.get("https://ws.audioscrobbler.com/2.0/", {
+      timeout: Number(process.env.LASTFM_REQUEST_TIMEOUT_MS || 15000),
+      params: {
         method: "user.getrecenttracks",
         user: process.env.LASTFM_USERNAME,
         api_key: process.env.LASTFM_API_KEY,
         format: "json",
         limit,
         page
-      } })
-    );
-
-    const recentTracks = response.data?.recenttracks;
-    const tracks = recentTracks?.track || [];
-    const attr = recentTracks?.["@attr"];
-
-    const parsed = tracks
-      .filter(t => !(page > 1 && t["@attr"]?.nowplaying))
-      .map(t => ({
-        track: t.name,
-        artist: t.artist["#text"],
-        image: t.image?.find(i => i.size === "extralarge")?.["#text"] ||
-               t.image?.find(i => i.size === "large")?.["#text"] || null,
-        nowPlaying: Boolean(t["@attr"]?.nowplaying),
-        date: t.date ? Number(t.date.uts) * 1000 : null
-      }));
-
-    res.json({
-      tracks: parsed,
-      hasMore: page < Number(attr?.totalPages || 1)
+      }
     });
+    assertLastFmResponse(result.data);
+    return result;
+  });
 
-  } catch (err) {
-    console.error("[recent-scrobbles ERROR]", sanitizeError(err));
+  const recentTracks = response.data?.recenttracks;
+  const tracks = Array.isArray(recentTracks?.track)
+    ? recentTracks.track
+    : recentTracks?.track
+      ? [recentTracks.track]
+      : [];
+  const attr = recentTracks?.["@attr"];
 
-    res.status(500).json({ error: "Failed to fetch recent scrobbles" });
-  }
-});
+  const parsed = tracks
+    .filter(track => !(page > 1 && track["@attr"]?.nowplaying))
+    .map(track => ({
+      track: track.name,
+      artist: track.artist?.["#text"] || "Unknown artist",
+      image: track.image?.find(image => image.size === "extralarge")?.["#text"]
+        || track.image?.find(image => image.size === "large")?.["#text"]
+        || null,
+      nowPlaying: Boolean(track["@attr"]?.nowplaying),
+      date: track.date ? Number(track.date.uts) * 1000 : null
+    }));
 
-app.post("/api/import/scrobbles", upload.single("file"), (req, res) => {
-  if(!req.file) {
-    res.status(400).json({ error: "No file uploaded" });
-    return;
-  }
+  res.json({
+    tracks: parsed,
+    hasMore: page < Number(attr?.totalPages || 1)
+  });
+}));
 
-  const allowedMimeTypes = [
-    "text/csv",
-    "application/vnd.ms-excel",
-    "text/plain",
-    "application/csv"
-  ];
+app.post("/api/import/scrobbles", (req, res, next) => {
+  csvUpload.single("file")(req, res, error => {
+    if (error) return res.status(400).json({ error: getUploadErrorMessage(error) });
+    next();
+  });
+}, asyncRoute(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-  if (!allowedMimeTypes.includes(req.file.mimetype)) {
-    return res.status(400).json({
-      error: `Invalid file type: ${req.file.mimetype}`
-    });
-  }
-
-  importScrobbleCSV(req.file.buffer, res);
-})
+  const result = await importScrobbleCSV(req.file.buffer);
+  res.json(result);
+}));
 
 app.get("/api/export/scrobbles", (req, res) => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader(
-    "Content-Disposition",
-    'attachment; filename="scrobbles.csv"'
-  );
-
+  res.setHeader("Content-Disposition", 'attachment; filename="scrobbles.csv"');
   exportScrobbleCSV(res);
 });
 
-app.get('/api/user-stats', async (req, res) => {
-    try {
-        const lastFmData = await getLastFmUserInfo();
+app.get("/api/user-stats", asyncRoute(async (req, res) => {
+  setNoStore(res);
 
-        const totalScrobbles = db.prepare('SELECT COUNT(*) as count FROM scrobbles').get().count;
-        const uniqueArtists = db.prepare('SELECT COUNT(DISTINCT artist) as count FROM scrobbles').get().count;
-        const uniqueAlbums = db.prepare('SELECT COUNT(DISTINCT album) as count FROM scrobbles').get().count;
-        const uniqueTracks = db.prepare('SELECT COUNT(DISTINCT track) as count FROM scrobbles').get().count;
-        const firstScrobble = db.prepare('SELECT MIN(played_at) as first_date FROM scrobbles').get().first_date;
+  const [lastFmData, stats] = await Promise.all([
+    getLastFmUserInfo(),
+    Promise.resolve(db.prepare(`
+      SELECT
+        COUNT(*) AS totalScrobbles,
+        COUNT(DISTINCT artist) AS uniqueArtists,
+        (
+          SELECT COUNT(*)
+          FROM (
+            SELECT artist, album
+            FROM scrobbles
+            WHERE album IS NOT NULL AND TRIM(album) != ''
+            GROUP BY artist, album
+          )
+        ) AS uniqueAlbums,
+        (
+          SELECT COUNT(*)
+          FROM (
+            SELECT artist, track
+            FROM scrobbles
+            GROUP BY artist, track
+          )
+        ) AS uniqueTracks,
+        MIN(played_at) AS joinedDate
+      FROM scrobbles
+    `).get())
+  ]);
 
-        res.json({
-            username: lastFmData.name,
-            avatar: lastFmData.avatar,
-            totalScrobbles,
-            uniqueArtists,
-            uniqueAlbums,
-            uniqueTracks,
-            joinedDate: firstScrobble
-        });
+  res.json({
+    username: lastFmData.name,
+    avatar: lastFmData.avatar,
+    ...stats
+  });
+}));
 
-    } catch (error) {
-        console.error("Error searching stats:", error);
-        res.status(500).json({ error: "Error loading stats" });
+app.get("/api/generate-share", asyncRoute(async (req, res) => {
+  setNoStore(res);
+
+  try {
+    const buffer = await generateShareImage(req.query);
+    res.type("png").send(buffer);
+  } catch (error) {
+    if (error instanceof ShareGenerationBusyError) {
+      return res.status(429).json({ error: error.message });
     }
+
+    throw error;
+  }
+}));
+
+app.get("/api/friends", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  res.json(await getFriendsList());
+}));
+
+app.get("/api/friends/compare/:username", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const comparison = await compareWithFriend(db, req.params.username);
+
+  if (comparison.error) {
+    return res.status(502).json(comparison);
+  }
+
+  res.json(comparison);
+}));
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+
+  console.error(`[${req.method} ${req.path}]`, sanitizeError(error));
+  const parsedStatus = Number(error.statusCode || error.status || 500);
+  const status = Number.isInteger(parsedStatus) && parsedStatus >= 400 && parsedStatus <= 599
+    ? parsedStatus
+    : 500;
+  const message = status >= 500 ? "Internal server error" : error.message;
+  res.status(status).json({ error: message });
 });
 
-app.get('/api/generate-share', async (req, res) => {
-    try {
-        const { period, types, format } = req.query;
-        const selectedTypes = types ? types.split(',') : ['albums'];
-        const isStory = format === 'story';
+let server;
 
-        const username = await getLastFmUserInfo();
-        const recapTitle = `${username.name} RECAP`;
+if (require.main === module) {
+  server = app.listen(PORT, () => {
+    console.log(`🚀 Dashboard running at http://localhost:${PORT}`);
+  });
+}
 
-        const now = Math.floor(Date.now() / 1000);
-        let start = 0;
-        
-        switch (period) {
-            case '7day': start = now - (7 * 24 * 60 * 60); break;
-            case '30day': start = now - (30 * 24 * 60 * 60); break;
-            case '3month': start = now - (90 * 24 * 60 * 60); break;
-            case '6month': start = now - (180 * 24 * 60 * 60); break;
-            case 'year': start = now - (365 * 24 * 60 * 60); break;
-            case 'all': start = 0; break;
-            default: start = now - (7 * 24 * 60 * 60);
-        }
-
-        const limits = isStory 
-            ? { albums: 3, artists: 3, tracks: 4 } 
-            : { albums: 9, artists: 6, tracks: 5 };
-
-        const data = {};
-        if (selectedTypes.includes('albums')) {
-            data.albums = db.prepare(`SELECT album, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? AND album_image IS NOT NULL AND album_image != '' GROUP BY album, artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.albums);
-        }
-        if (selectedTypes.includes('artists')) {
-            data.artists = db.prepare(`SELECT s.artist, a.artist_image, COUNT(*) as play_count FROM scrobbles s LEFT JOIN artists a ON s.artist = a.artist WHERE s.played_at > ? GROUP BY s.artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.artists);
-        }
-        if (selectedTypes.includes('tracks')) {
-            data.tracks = db.prepare(`SELECT track, artist, album_image, COUNT(*) as play_count FROM scrobbles WHERE played_at > ? GROUP BY track, artist ORDER BY play_count DESC LIMIT ?`).all(start, limits.tracks);
-        }
-
-        if (!data.albums?.length && !data.artists?.length && !data.tracks?.length) {
-            return res.status(400).json({ error: "No data found." });
-        }
-
-        let width, height;
-        if (isStory) {
-            width = 1080;
-            height = 1920;
-        } else {
-            width = 1080;
-            const headerHeight = 250;
-            const footerHeight = 100;
-            let totalHeight = headerHeight + footerHeight;
-            if (selectedTypes.includes('albums') && data.albums?.length) totalHeight += 1150;
-            if (selectedTypes.includes('artists') && data.artists?.length) totalHeight += 900;
-            if (selectedTypes.includes('tracks') && data.tracks?.length) totalHeight += 950;
-            height = totalHeight;
-        }
-
-        const canvas = createCanvas(width, height);
-        const ctx = canvas.getContext('2d');
-
-        if (isStory) {
-            const grd = ctx.createLinearGradient(0, 0, 0, height);
-            grd.addColorStop(0, '#2b2b2b'); 
-            grd.addColorStop(1, '#000000');
-            ctx.fillStyle = grd;
-        } else {
-            ctx.fillStyle = '#121212';
-        }
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        
-        let periodText = period === 'all' ? 'ALL TIME' : period.toUpperCase().replace('DAY', ' DAYS').replace('MONTH', ' MONTHS');
-        
-        const maxWidth = width - 120;
-        let fontSize = isStory ? 60 : 70;
-
-        if (isStory) {
-            ctx.fillStyle = '#fff';
-            do {
-              ctx.font = `bold ${fontSize}px Sans-serif`;
-              fontSize -= 2;
-            } while (ctx.measureText(recapTitle).width > maxWidth && fontSize > 36);
-
-            ctx.fillText(recapTitle.toUpperCase(), width / 2, isStory ? 220 : 100);
-            
-            const textWidth = ctx.measureText(periodText).width;
-            ctx.fillStyle = '#ff7302';
-            ctx.beginPath();
-            ctx.roundRect((width/2) - (textWidth/2) - 20, 260, textWidth + 40, 60, 30);
-            ctx.fill();
-            
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 35px Sans-serif';
-            ctx.fillText(periodText, width / 2, 303);
-        } else {
-            do {
-              ctx.font = `bold ${fontSize}px Sans-serif`;
-              fontSize -= 2;
-            } while (ctx.measureText(recapTitle).width > maxWidth && fontSize > 36);
-            
-            ctx.fillStyle = '#ff7302';
-            ctx.fillText(recapTitle.toUpperCase(), width / 2, isStory ? 220 : 100);
-
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 40px Sans-serif';
-            ctx.fillText(periodText, width / 2, 170);
-        }
-
-        
-        let currentY = isStory ? 400 : 250;
-        const spacingStory = 80;
-
-        if (data.albums && data.albums.length > 0) {
-            ctx.fillStyle = '#fff';
-            ctx.textAlign = 'left';
-            ctx.font = 'bold 45px Sans-serif';
-            
-            if(isStory) {
-                ctx.fillStyle = '#ff7302';
-                ctx.fillRect(60, currentY + 10, 10, 40); 
-                ctx.fillStyle = '#fff';
-                ctx.fillText('TOP ALBUMS', 100, currentY + 45);
-            } else {
-                ctx.fillText('TOP ALBUMS', 60, currentY + 50);
-            }
-
-            const gridSize = isStory ? 280 : 300;
-            const gap = 30;
-            const cols = 3; 
-            const startX = (width - ((cols * gridSize) + ((cols-1) * gap))) / 2;
-            const gridY = currentY + (isStory ? 80 : 100);
-
-            for (let i = 0; i < data.albums.length; i++) {
-                const item = data.albums[i];
-                const r = Math.floor(i / cols);
-                const c = i % cols;
-                const x = startX + c * (gridSize + gap);
-                const y = gridY + r * (gridSize + gap);
-
-                try {
-                    const img = await loadImage(item.album_image);
-                    ctx.drawImage(img, x, y, gridSize, gridSize);
-                    ctx.strokeStyle = isStory ? 'rgba(255,255,255,0.2)' : '#222';
-                    ctx.lineWidth = isStory ? 2 : 1;
-                    ctx.strokeRect(x, y, gridSize, gridSize);
-                    
-                    if(isStory) {
-                        ctx.fillStyle = '#ff7302';
-                        ctx.fillRect(x, y, 50, 50);
-                        ctx.fillStyle = '#000';
-                        ctx.font = 'bold 30px Sans-serif';
-                        ctx.textAlign = 'center'; 
-                        ctx.fillText(`${i+1}`, x + 25, y + 37);
-                        ctx.textAlign = 'left';
-                    }
-                } catch(e) {
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(x, y, gridSize, gridSize);
-                }
-            }
-            
-            if (isStory) {
-                const rows = Math.ceil(data.albums.length / 3);
-                currentY += (rows * (gridSize + gap)) + spacingStory + 50; 
-            } else {
-                currentY += 1150;
-            }
-        }
-
-        if (data.artists && data.artists.length > 0) {
-            ctx.fillStyle = '#fff';
-            ctx.textAlign = 'left';
-            ctx.font = 'bold 45px Sans-serif';
-            
-            if(isStory) {
-                ctx.fillStyle = '#ff7302';
-                ctx.fillRect(60, currentY + 10, 10, 40);
-                ctx.fillStyle = '#fff';
-                ctx.fillText('TOP ARTISTS', 100, currentY + 45);
-            } else {
-                ctx.fillText('TOP ARTISTS', 60, currentY + 50);
-            }
-
-            const artSize = isStory ? 220 : 280;
-            const gap = isStory ? 60 : 40;
-            const startListY = currentY + 240;
-            const maxCols = 3;
-
-            for (let i = 0; i < data.artists.length; i++) {
-                const item = data.artists[i];
-                const r = Math.floor(i / maxCols);
-                const c = i % maxCols;
-                
-                const totalRowWidth = (Math.min(data.artists.length, maxCols) * artSize) + ((Math.min(data.artists.length, maxCols)-1) * gap);
-                const startRowX = (width - totalRowWidth) / 2 + (artSize/2);
-
-                const centerX = startRowX + c * (artSize + gap);
-                const centerY = startListY + r * (artSize + (isStory ? 90 : 110)) - (isStory ? 50 : 0);
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, artSize / 2, 0, Math.PI * 2, true);
-                ctx.closePath();
-                ctx.clip();
-
-                try {
-                    if (item.artist_image) {
-                        const img = await loadImage(item.artist_image);
-                        ctx.drawImage(img, centerX - artSize/2, centerY - artSize/2, artSize, artSize);
-                    } else { throw new Error(); }
-                } catch (e) {
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(centerX - artSize/2, centerY - artSize/2, artSize, artSize);
-                    ctx.fillStyle = '#fff';
-                    ctx.textAlign = 'center';
-                    ctx.font = 'bold 80px Sans-serif';
-                    ctx.fillText(item.artist.charAt(0), centerX, centerY + 30);
-                }
-                ctx.restore();
-
-                ctx.fillStyle = '#fff';
-                ctx.font = isStory ? 'bold 22px Sans-serif' : 'bold 24px Sans-serif';
-                ctx.textAlign = 'center';
-                let name = item.artist;
-                if (name.length > 18) name = name.substring(0, 16) + '...';
-                ctx.fillText(name, centerX, centerY + (artSize/2) + 35);
-                
-                ctx.fillStyle = '#aaa';
-                ctx.font = isStory ? '18px Sans-serif' : '20px Sans-serif';
-                ctx.fillText(`${item.play_count} plays`, centerX, centerY + (artSize/2) + 60);
-                
-                ctx.textAlign = 'left';
-            }
-
-            if(isStory) {
-                currentY += artSize + 150 + spacingStory;
-            } else {
-                currentY += 900;
-            }
-        }
-
-        if (data.tracks && data.tracks.length > 0) {
-            ctx.fillStyle = '#fff';
-            ctx.textAlign = 'left';
-            ctx.font = 'bold 45px Sans-serif';
-
-            if(isStory) {
-                ctx.fillStyle = '#ff7302';
-                ctx.fillRect(60, currentY + 10, 10, 40);
-                ctx.fillStyle = '#fff';
-                ctx.fillText('TOP TRACKS', 100, currentY + 45);
-            } else {
-                ctx.fillText('TOP TRACKS', 60, currentY + 50);
-            }
-
-            let listY = currentY + (isStory ? 80 : 120);
-            const itemHeight = isStory ? 130 : 160;
-
-            for (let i = 0; i < data.tracks.length; i++) {
-                const item = data.tracks[i];
-                
-                if(isStory) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-                    ctx.beginPath();
-                    ctx.roundRect(50, listY, width - 100, itemHeight - 15, 15);
-                    ctx.fill();
-                } else {
-                    ctx.fillStyle = '#1a1a1a';
-                    ctx.fillRect(50, listY, width - 100, itemHeight - 20);
-                }
-
-                ctx.fillStyle = '#ff7302';
-                ctx.font = 'bold 40px Sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(`#${i+1}`, 100, listY + (isStory ? 75 : 85));
-
-                const imgSize = isStory ? 90 : 120;
-                const imgY = listY + (isStory ? 12 : 10);
-                const imgX = 160;
-
-                if(item.album_image) {
-                    try {
-                        const img = await loadImage(item.album_image);
-                        ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
-                    } catch(e) {}
-                } else {
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(imgX, imgY, imgSize, imgSize);
-                }
-
-                ctx.textAlign = 'left';
-                const textStartX = isStory ? 280 : 340;
-
-                ctx.fillStyle = '#fff';
-                ctx.font = isStory ? 'bold 30px Sans-serif' : 'bold 35px Sans-serif';
-                let trackName = item.track;
-                const maxLen = isStory ? 22 : 25;
-                if (trackName.length > maxLen) trackName = trackName.substring(0, maxLen) + '...';
-                ctx.fillText(trackName, textStartX, listY + (isStory ? 50 : 60));
-
-                ctx.fillStyle = '#aaa';
-                ctx.font = isStory ? '24px Sans-serif' : '28px Sans-serif';
-                let artistName = item.artist;
-                if(isStory && artistName.length > 25) artistName = artistName.substring(0, 25) + '...';
-                ctx.fillText(artistName, textStartX, listY + (isStory ? 85 : 100));
-
-                ctx.textAlign = 'right';
-                ctx.fillStyle = isStory ? '#ddd' : '#fff';
-                ctx.font = 'bold 26px Sans-serif';
-                ctx.fillText(`${item.play_count} scrobbles`, width - 80, listY + (isStory ? 75 : 85));
-                
-                listY += itemHeight;
-            }
-            if (!isStory) currentY += 950;
-        }
-
-        ctx.fillStyle = isStory ? 'rgba(255,255,255,0.5)' : '#555';
-        ctx.font = '24px Sans-serif';
-        ctx.textAlign = 'center';
-        const footerY = isStory ? height - 80 : height - 40;
-        ctx.fillText('Generated by YourLastFM', width / 2, footerY);
-
-        const buffer = canvas.toBuffer('image/png');
-        res.set('Content-Type', 'image/png');
-        res.send(buffer);
-
-    } catch (error) {
-        console.error("Generate error:", error);
-        res.status(500).json({ error: "Server error generating image" });
-    }
-});
-
-app.get('/api/friends', async (req, res) => {
-    try {
-        const friends = await getFriendsList();
-        res.json(friends);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error searching for friends' });
-    }
-});
-
-app.get('/api/friends/compare/:username', async (req, res) => {
-    try {
-        const friendUsername = req.params.username;
-        const comparison = await compareWithFriend(db, friendUsername);
-        res.json(comparison);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error comparing profiles' });
-    }
-});
-
-cron.schedule('0 3 * * *', async () => {
-    await verifyIntegrity();
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Dashboard running in http://localhost:${PORT}`);
-});
+module.exports = { app, server };

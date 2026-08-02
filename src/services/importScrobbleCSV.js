@@ -1,52 +1,121 @@
-const db = require("../db");
 const fastCsv = require("fast-csv");
 const { Readable } = require("stream");
 
-// Import scrobble from CSV File
-// we receive a buffer and a response object, so we can read the csv file buffer
-function importScrobbleCSV(buffer, res) {
-  try {
-    const stream = Readable.from(buffer.toString());
+const db = require("../db");
 
-    // INSERT OR IGNORE, a quick solution for duplicated entries...
-    const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO scrobbles
-      (artist, track, album, album_image, played_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+const insertStmt = db.prepare(`
+  INSERT OR IGNORE INTO scrobbles
+  (artist, track, album, album_image, played_at, track_duration)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
 
-    const insertMany = db.transaction((rows) => {
-      for (const row of rows) {
-        insertStmt.run(
-          row.artist,
-          row.track,
-          row.album || null,
-          row.album_image || null,
-          Number(row.played_at)
-        );
-      }
-    });
+const insertBatch = db.transaction(rows => {
+  let imported = 0;
 
-    const rows = [];
+  for (const row of rows) {
+    const result = insertStmt.run(
+      row.artist,
+      row.track,
+      row.album,
+      row.albumImage,
+      row.playedAt,
+      row.trackDuration
+    );
 
-    stream
-      .pipe(fastCsv.parse({ headers: true, ignoreEmpty: true }))
-      .on("error", (err) => {
-        console.error(err);
-        res.status(400).json({ error: "Invalid CSV" });
-      })
-      .on("data", (row) => {
-        rows.push(row);
-      })
-      .on("end", () => {
-        insertMany(rows);
-        res.json({ imported: rows.length });
+    imported += result.changes;
+  }
+
+  return imported;
+});
+
+function normalizeRow(row) {
+  const artist = String(row.artist || "").trim();
+  const track = String(row.track || "").trim();
+  const playedAt = Number(row.played_at);
+  const duration = Number(row.track_duration);
+  const maximumTimestamp = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+
+  if (
+    !artist
+    || !track
+    || !Number.isInteger(playedAt)
+    || playedAt <= 0
+    || playedAt > maximumTimestamp
+  ) {
+    return null;
+  }
+
+  return {
+    artist,
+    track,
+    album: String(row.album || "").trim() || null,
+    albumImage: String(row.album_image || "").trim() || null,
+    playedAt,
+    trackDuration: Number.isInteger(duration) && duration > 0 ? duration : null
+  };
+}
+
+function importScrobbleCSV(buffer) {
+  return new Promise((resolve, reject) => {
+    const batch = [];
+    let imported = 0;
+    let processed = 0;
+    let skipped = 0;
+    let settled = false;
+
+    function flushBatch() {
+      if (!batch.length) return;
+      imported += insertBatch(batch.splice(0, batch.length));
+    }
+
+    const input = Readable.from([buffer]);
+    const parser = fastCsv.parse({
+        headers: true,
+        ignoreEmpty: true,
+        trim: true
       });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      input.destroy();
+      parser.destroy();
+      reject(error);
+    };
+
+    input
+      .pipe(parser)
+      .on("error", fail)
+      .on("data", row => {
+        if (settled) return;
+
+        try {
+          processed++;
+          const normalized = normalizeRow(row);
+
+          if (!normalized) {
+            skipped++;
+            return;
+          }
+
+          batch.push(normalized);
+          if (batch.length >= 1000) flushBatch();
+        } catch (error) {
+          fail(error);
+        }
+      })
+      .on("end", () => {
+        if (settled) return;
+
+        try {
+          flushBatch();
+          settled = true;
+          resolve({ imported, processed, skipped, duplicates: processed - skipped - imported });
+        } catch (error) {
+          fail(error);
+        }
+      });
+  });
 }
 
 module.exports = { importScrobbleCSV };

@@ -1,14 +1,25 @@
 {
   "name": "your_lastfm",
   "version": "1.0.0",
-  "description": "",
+  "description": "Self-hosted Last.fm scrobble dashboard, sync service and recap generator",
   "main": "src/api.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/api.js",
+    "start:cron": "node src/cron.js",
+    "sync": "node src/index.js",
+    "sync:full": "node src/index.js --full",
+    "sync:initial": "node src/initial-sync.js",
+    "check": "node scripts/check.js",
+    "test": "node --test test/*.test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "lastfm",
+    "scrobbles",
+    "dashboard",
+    "self-hosted"
+  ],
+  "author": "Gomaink",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.13.2",
@@ -19,7 +30,9 @@
     "express": "^5.2.1",
     "fast-csv": "^5.0.5",
     "multer": "^2.0.2",
-    "mysql2": "^3.15.3",
     "node-cron": "^4.2.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

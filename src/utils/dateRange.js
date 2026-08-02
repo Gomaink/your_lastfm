@@ -1,54 +1,80 @@
 function getDateRange(range, year, month) {
   const now = new Date();
-  let from = new Date(now);
-  let to = new Date(now);
 
   if (range) {
+    const from = new Date(now);
+
     switch (range) {
-      case "day": from.setDate(now.getDate() - 1); break;
-      case "week": from.setDate(now.getDate() - 7); break;
-      case "month": from.setMonth(now.getMonth() - 1); break;
-      case "year": from.setFullYear(now.getFullYear() - 1); break;
-      default: return { from: null, to: null };
+      case "day":
+        from.setUTCDate(from.getUTCDate() - 1);
+        break;
+      case "week":
+        from.setUTCDate(from.getUTCDate() - 7);
+        break;
+      case "month":
+        from.setUTCMonth(from.getUTCMonth() - 1);
+        break;
+      case "year":
+        from.setUTCFullYear(from.getUTCFullYear() - 1);
+        break;
+      default:
+        return { from: null, to: null };
     }
-  } else if (year) {
-    const y = parseInt(year);
-    const m = month ? parseInt(month) : null;
-    if (m) {
-      from = new Date(y, m - 1, 1);
-      to = new Date(y, m, 0);
-    } else {
-      from = new Date(y, 0, 1);
-      to = new Date(y, 11, 31);
-    }
-  } else {
+
+    return { from, to: now };
+  }
+
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isInteger(parsedYear) || parsedYear < 1970 || parsedYear > 9999) {
     return { from: null, to: null };
   }
 
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
+  const parsedMonth = month === undefined || month === null || month === ""
+    ? null
+    : Number.parseInt(month, 10);
+
+  if (parsedMonth !== null && (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12)) {
+    return { from: null, to: null };
+  }
+
+  const from = parsedMonth === null
+    ? new Date(Date.UTC(parsedYear, 0, 1))
+    : new Date(Date.UTC(parsedYear, parsedMonth - 1, 1));
+
+  const to = parsedMonth === null
+    ? new Date(Date.UTC(parsedYear + 1, 0, 1) - 1)
+    : new Date(Date.UTC(parsedYear, parsedMonth, 1) - 1);
+
   return { from, to };
 }
 
 function fillMissingDates(rows, range, year, month) {
-    const { from, to } = getDateRange(range, year, month); 
+  const { from, to } = getDateRange(range, year, month);
+  if (!from || !to) return rows;
 
-    if (!from || !to) return rows; 
+  const result = new Map();
+  const current = new Date(Date.UTC(
+    from.getUTCFullYear(),
+    from.getUTCMonth(),
+    from.getUTCDate()
+  ));
+  const lastDay = new Date(Date.UTC(
+    to.getUTCFullYear(),
+    to.getUTCMonth(),
+    to.getUTCDate()
+  ));
 
-    const result = {};
-    let current = new Date(from);
-    
-    while (current <= to) {
-        const dayString = current.toISOString().substring(0, 10); 
-        result[dayString] = { day: dayString, plays: 0 };
-        current.setDate(current.getDate() + 1); 
-    }
-    
-    rows.forEach(row => {
-        if (result[row.day]) result[row.day] = row;
-    });
+  while (current <= lastDay) {
+    const day = current.toISOString().slice(0, 10);
+    result.set(day, { day, plays: 0 });
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
 
-    return Object.values(result).sort((a, b) => (a.day > b.day ? 1 : -1));
+  for (const row of rows) {
+    if (result.has(row.day)) result.set(row.day, row);
+  }
+
+  return Array.from(result.values());
 }
 
 module.exports = { getDateRange, fillMissingDates };
