@@ -9,6 +9,7 @@ import { loadScrobbles } from "./scrobbles.js";
 import { loadAccount } from "./account.js";
 import { initSharePage } from "./share.js";
 import { loadFriends } from "./friends.js";
+import { loadLeaderboards } from "./leaderboards.js";
 
 const UI = {
   loading: document.getElementById("global-loading"),
@@ -231,6 +232,9 @@ function toggleView(viewName) {
       break;
     case "friends":
       loadFriends();
+      break;
+    case "leaderboards":
+      loadLeaderboards();
       break;
     case "account":
       loadAccount();

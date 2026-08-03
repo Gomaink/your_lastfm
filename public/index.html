@@ -44,6 +44,9 @@
                         <button class="sidebar-link" data-view="friends">
                             <i class="mdi mdi-account-multiple"></i> Friends
                         </button>
+                        <button class="sidebar-link" data-view="leaderboards">
+                            <i class="mdi mdi-podium"></i> Leaderboards
+                        </button>
                         <button class="sidebar-link" data-view="share">
                             <i class="mdi mdi-share-variant"></i> Share
                         </button>
@@ -255,6 +258,144 @@
                     </div>
                 </section>
 
+                <section id="leaderboards-view" class="d-none mt-4">
+                    <div class="leaderboards-shell">
+                        <header class="leaderboards-header">
+                            <div>
+                                <div class="leaderboards-eyebrow">Community charts</div>
+                                <h2>Custom Leaderboards</h2>
+                                <p>Create local groups and compare public Last.fm listening charts.</p>
+                            </div>
+                            <button id="leaderboard-new-group" class="btn btn-success" type="button">
+                                <i class="mdi mdi-account-multiple-plus me-1"></i> New group
+                            </button>
+                        </header>
+
+                        <div class="leaderboards-layout">
+                            <aside class="leaderboard-groups-panel">
+                                <div class="leaderboard-panel-heading">
+                                    <span>Groups</span>
+                                    <span id="leaderboard-group-count" class="leaderboard-count-badge">0</span>
+                                </div>
+                                <div id="leaderboard-groups-list" class="leaderboard-groups-list"></div>
+                            </aside>
+
+                            <div class="leaderboard-main-panel">
+                                <div id="leaderboard-empty" class="leaderboard-empty-state">
+                                    <i class="mdi mdi-podium-gold"></i>
+                                    <h3>Create your first group</h3>
+                                    <p>Add at least two Last.fm usernames to build a shared leaderboard.</p>
+                                    <button class="btn btn-outline-warning leaderboard-empty-create" type="button">
+                                        Create group
+                                    </button>
+                                </div>
+
+                                <div id="leaderboard-content" class="d-none">
+                                    <div class="leaderboard-group-header">
+                                        <div>
+                                            <div class="leaderboards-eyebrow">Selected group</div>
+                                            <h3 id="leaderboard-group-name">Group</h3>
+                                            <div id="leaderboard-group-members-label" class="text-secondary"></div>
+                                        </div>
+                                        <div class="leaderboard-group-actions">
+                                            <button id="leaderboard-edit-group" class="btn btn-sm btn-outline-light" type="button">
+                                                <i class="mdi mdi-pencil"></i> Edit
+                                            </button>
+                                            <button id="leaderboard-delete-group" class="btn btn-sm btn-outline-danger" type="button">
+                                                <i class="mdi mdi-delete-outline"></i> Delete
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="leaderboard-controls">
+                                        <div class="leaderboard-control-block">
+                                            <span class="leaderboard-control-label">Time range</span>
+                                            <div class="leaderboard-range-presets">
+                                                <button class="leaderboard-preset active" data-days="30" type="button">30 days</button>
+                                                <button class="leaderboard-preset" data-days="7" type="button">7 days</button>
+                                                <button class="leaderboard-preset" data-days="90" type="button">90 days</button>
+                                                <button class="leaderboard-preset" data-days="365" type="button">1 year</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="leaderboard-date-fields">
+                                            <label>
+                                                <span>From</span>
+                                                <input id="leaderboard-from" type="date" class="leaderboard-date-input">
+                                            </label>
+                                            <label>
+                                                <span>To</span>
+                                                <input id="leaderboard-to" type="date" class="leaderboard-date-input">
+                                            </label>
+                                        </div>
+
+                                        <div class="leaderboard-control-block leaderboard-type-block">
+                                            <span class="leaderboard-control-label">Ranking</span>
+                                            <div class="leaderboard-type-switch">
+                                                <button class="leaderboard-type active" data-type="artists" type="button">Artists</button>
+                                                <button class="leaderboard-type" data-type="albums" type="button">Albums</button>
+                                                <button class="leaderboard-type" data-type="tracks" type="button">Tracks</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="leaderboard-control-actions">
+                                            <button id="leaderboard-apply" class="btn btn-success" type="button">Apply</button>
+                                            <button id="leaderboard-refresh" class="btn btn-outline-warning" type="button" title="Ignore cached data">
+                                                <i class="mdi mdi-refresh"></i> Refresh
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div id="leaderboard-status" class="leaderboard-status" aria-live="polite"></div>
+                                    <div id="leaderboard-loading" class="leaderboard-loading d-none">
+                                        <div class="spinner-border text-warning" role="status"></div>
+                                        <span>Building group charts from Last.fm...</span>
+                                    </div>
+                                    <div id="leaderboard-error" class="alert alert-danger d-none" role="alert"></div>
+
+                                    <div id="leaderboard-results" class="d-none">
+                                        <div class="leaderboard-summary-grid">
+                                            <div class="leaderboard-summary-card">
+                                                <span>Total scrobbles</span>
+                                                <strong id="leaderboard-total-scrobbles">0</strong>
+                                            </div>
+                                            <div class="leaderboard-summary-card">
+                                                <span>Members with data</span>
+                                                <strong id="leaderboard-active-members">0</strong>
+                                            </div>
+                                            <div class="leaderboard-summary-card">
+                                                <span>Current leader</span>
+                                                <strong id="leaderboard-current-leader">—</strong>
+                                            </div>
+                                        </div>
+
+                                        <section class="leaderboard-results-section">
+                                            <div class="leaderboard-section-heading">
+                                                <div>
+                                                    <div class="leaderboards-eyebrow">Member ranking</div>
+                                                    <h4>Scrobbles by listener</h4>
+                                                </div>
+                                            </div>
+                                            <div id="leaderboard-member-ranking" class="leaderboard-member-ranking"></div>
+                                        </section>
+
+                                        <section class="leaderboard-results-section">
+                                            <div class="leaderboard-section-heading">
+                                                <div>
+                                                    <div class="leaderboards-eyebrow">Group chart</div>
+                                                    <h4 id="leaderboard-items-title">Top artists</h4>
+                                                </div>
+                                                <small id="leaderboard-cache-state" class="text-secondary"></small>
+                                            </div>
+                                            <div id="leaderboard-items" class="leaderboard-items"></div>
+                                        </section>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="share-view" class="d-none mt-4">
                     <div class="container-fluid p-4">
                         <div class="row">
@@ -419,6 +560,80 @@
                 </section>
 
             </main>
+        </div>
+
+        <div class="modal fade" id="leaderboard-group-modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content leaderboard-modal-content">
+                    <div class="modal-header border-0">
+                        <div>
+                            <div class="leaderboards-eyebrow">Local group</div>
+                            <h5 id="leaderboard-group-modal-title" class="modal-title">Create leaderboard group</h5>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="leaderboard-group-form">
+                            <label class="leaderboard-form-label" for="leaderboard-group-name-input">Group name</label>
+                            <input
+                                id="leaderboard-group-name-input"
+                                class="form-control leaderboard-form-control"
+                                maxlength="60"
+                                autocomplete="off"
+                                placeholder="Weekend listeners"
+                                required
+                            >
+
+                            <div class="leaderboard-member-form-header">
+                                <label class="leaderboard-form-label mb-0" for="leaderboard-member-input">Last.fm usernames</label>
+                                <button id="leaderboard-add-me" class="btn btn-sm btn-outline-warning" type="button">Add me</button>
+                            </div>
+                            <div id="leaderboard-member-chips" class="leaderboard-member-chips"></div>
+                            <div class="input-group">
+                                <input
+                                    id="leaderboard-member-input"
+                                    class="form-control leaderboard-form-control"
+                                    maxlength="64"
+                                    autocomplete="off"
+                                    placeholder="Type a username and press Enter"
+                                >
+                                <button id="leaderboard-add-member" class="btn btn-outline-light" type="button">Add</button>
+                            </div>
+                            <div id="leaderboard-member-limit" class="form-text text-secondary">At least 2 members.</div>
+                            <div id="leaderboard-group-form-error" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+                        <button id="leaderboard-save-group" type="button" class="btn btn-success">
+                            <span class="leaderboard-save-label">Save group</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="leaderboard-detail-modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content leaderboard-modal-content">
+                    <div class="modal-header border-0">
+                        <div>
+                            <div class="leaderboards-eyebrow">Top tracks</div>
+                            <h5 id="leaderboard-detail-title" class="modal-title">Item details</h5>
+                            <div id="leaderboard-detail-subtitle" class="text-secondary small"></div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="leaderboard-detail-loading" class="leaderboard-loading">
+                            <div class="spinner-border text-warning" role="status"></div>
+                            <span>Loading top tracks...</span>
+                        </div>
+                        <div id="leaderboard-detail-error" class="alert alert-danger d-none"></div>
+                        <div id="leaderboard-detail-list" class="leaderboard-detail-list d-none"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="modal fade" id="album-cover-modal" tabindex="-1" aria-hidden="true">

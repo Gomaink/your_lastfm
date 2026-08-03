@@ -1,6 +1,6 @@
 # YourLastFM
 
-YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scrobbles into SQLite, displays listening statistics, compares your taste with friends, and generates shareable recap images.
+YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scrobbles into SQLite, displays listening statistics, compares your taste with friends, builds custom group leaderboards, and generates shareable recap images.
 
 ## Features
 
@@ -11,6 +11,7 @@ YourLastFM is a self-hosted Node.js dashboard that synchronizes your Last.fm scr
 - Direct Last.fm links for artists, albums, and tracks.
 - Persistent SQLite dashboard cache invalidated after syncs, imports, and manual cover changes.
 - Last.fm friends comparison with common artists, albums, and tracks, including resilient artwork and avatar fallbacks.
+- Custom local leaderboard groups with public Last.fm users, exact date ranges, member standings, combined artist/album/track charts, and top-track drill-downs.
 - Standard and Instagram Story recap images generated on the server.
 - Automatic album/artist image lookup, persistent image cache, and manual album-cover uploads.
 - CSV import and streaming CSV export.
@@ -110,6 +111,13 @@ The defaults are documented in `.env.example`.
 | `LASTFM_REQUEST_TIMEOUT_MS` | Last.fm request timeout | `15000` |
 | `DASHBOARD_CACHE_TTL_MS` | Persistent dashboard cache lifetime in milliseconds; `0` disables time-based expiry | `300000` |
 | `STATIC_ASSET_CACHE_SECONDS` | Browser cache lifetime for local JavaScript, CSS, and images | `300` |
+| `LEADERBOARD_CACHE_TTL_MS` | Persistent lifetime for generated leaderboard results; `0` disables time-based expiry | `900000` |
+| `LEADERBOARD_PROFILE_TTL_MS` | Lifetime of cached Last.fm user profiles | `86400000` |
+| `LEADERBOARD_ALBUM_TTL_MS` | Lifetime of cached album track lists | `2592000000` |
+| `LEADERBOARD_REQUEST_CONCURRENCY` | Concurrent Last.fm requests while building group charts | `4` |
+| `LEADERBOARD_MAX_GROUPS` | Maximum local leaderboard groups | `50` |
+| `LEADERBOARD_MAX_MEMBERS` | Maximum Last.fm users in one group | `20` |
+| `LEADERBOARD_MAX_RANGE_DAYS` | Maximum inclusive leaderboard date range | `366` |
 | `EXTERNAL_REQUEST_CONCURRENCY` | Concurrent metadata/image lookups | `4` |
 | `FRIENDS_CACHE_TTL_MS` | In-memory cache lifetime for the Last.fm friends list | `300000` |
 | `IMAGE_FAILURE_CACHE_MS` | Time before retrying an image lookup that returned nothing | `600000` |
@@ -131,13 +139,28 @@ The cache is invalidated automatically when:
 
 Rolling periods compare against the immediately preceding equivalent window. The Listening Clock uses the timezone offset reported by the browser.
 
+## Custom leaderboards
+
+Open **Leaderboards** from the sidebar, create a group, and add at least two public Last.fm usernames. The username configured in `LASTFM_USERNAME` can be added with the **Add me** button.
+
+Each group supports:
+
+- 7, 30, 90, and 365-day presets;
+- an inclusive custom date range;
+- artist, album, and track rankings;
+- member standings and per-item contribution counts;
+- artist and album drill-downs for the group's most-played tracks;
+- direct links to the corresponding Last.fm pages.
+
+Groups and their caches are stored locally in `stats.db`; no separate account system or external YourLastFM service is involved. Last.fm requests are concurrency-limited, retried, and cached. If one member temporarily fails, the remaining data is still displayed as a partial result. Use **Refresh** to bypass the current chart cache.
+
 ## Data and backups
 
 Persistent files are stored under `./data`:
 
 ```text
 data/
-├── stats.db
+├── stats.db        # scrobbles, settings, groups, and API caches
 ├── covers/
 └── image-cache/
 ```

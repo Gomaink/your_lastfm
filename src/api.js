@@ -26,6 +26,15 @@ const { ensureTrackDuration } = require("./services/trackDurationCache");
 const { getLastFmUserInfo } = require("./services/lastfm-username");
 const { getRemoteImage } = require("./services/remoteImageCache");
 const { getFriendsList, compareWithFriend } = require("./services/lastfm-friends");
+const {
+  createLeaderboardGroup,
+  deleteLeaderboardGroup,
+  getLeaderboardGroup,
+  getLeaderboardItemDetails,
+  getLeaderboardResult,
+  listLeaderboardGroups,
+  updateLeaderboardGroup
+} = require("./services/leaderboards");
 const { getDashboard } = require("./services/dashboard");
 const { invalidateDashboardCache } = require("./services/dashboardCache");
 const {
@@ -531,6 +540,43 @@ app.get("/api/friends/compare/:username", asyncRoute(async (req, res) => {
   }
 
   res.json(comparison);
+}));
+
+app.get("/api/leaderboards/groups", (req, res) => {
+  setNoStore(res);
+  res.json(listLeaderboardGroups());
+});
+
+app.get("/api/leaderboards/groups/:groupId", (req, res) => {
+  setNoStore(res);
+  res.json(getLeaderboardGroup(req.params.groupId));
+});
+
+app.post("/api/leaderboards/groups", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const group = await createLeaderboardGroup(req.body);
+  res.status(201).json(group);
+}));
+
+app.put("/api/leaderboards/groups/:groupId", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  const group = await updateLeaderboardGroup(req.params.groupId, req.body);
+  res.json(group);
+}));
+
+app.delete("/api/leaderboards/groups/:groupId", (req, res) => {
+  setNoStore(res);
+  res.json(deleteLeaderboardGroup(req.params.groupId));
+});
+
+app.get("/api/leaderboards/groups/:groupId/results", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  res.json(await getLeaderboardResult(req.params.groupId, req.query));
+}));
+
+app.get("/api/leaderboards/groups/:groupId/details", asyncRoute(async (req, res) => {
+  setNoStore(res);
+  res.json(await getLeaderboardItemDetails(req.params.groupId, req.query));
 }));
 
 app.use((error, req, res, next) => {

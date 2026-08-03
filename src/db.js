@@ -59,6 +59,71 @@ db.prepare(`
   )
 `).run();
 
+// Leaderboard groups and API caches are intentionally stored in the same SQLite
+// database so a container update never loses locally configured groups.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS leaderboard_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_members (
+    group_id INTEGER NOT NULL,
+    username_key TEXT NOT NULL,
+    username TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, username_key),
+    FOREIGN KEY (group_id) REFERENCES leaderboard_groups(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_user_cache (
+    username_key TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    realname TEXT,
+    avatar TEXT,
+    profile_url TEXT,
+    playcount INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_chart_cache (
+    cache_key TEXT PRIMARY KEY,
+    username_key TEXT NOT NULL,
+    chart_type TEXT NOT NULL,
+    range_from INTEGER NOT NULL,
+    range_to INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_result_cache (
+    cache_key TEXT PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (group_id) REFERENCES leaderboard_groups(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_album_cache (
+    cache_key TEXT PRIMARY KEY,
+    artist TEXT NOT NULL,
+    album TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_members_group_position
+  ON leaderboard_members (group_id, position);
+
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_chart_lookup
+  ON leaderboard_chart_cache (username_key, chart_type, range_from, range_to);
+
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_result_group
+  ON leaderboard_result_cache (group_id, created_at DESC);
+`);
+
 const scrobbleColumns = db.prepare("PRAGMA table_info(scrobbles)").all();
 const hasTrackDuration = scrobbleColumns.some(column => column.name === "track_duration");
 
