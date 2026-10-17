@@ -8,7 +8,7 @@ import {
 
 const AVATAR_PLACEHOLDER = "/images/artist-placeholder.png";
 const COVER_PLACEHOLDER = "/images/cover-placeholder.svg";
-const numberFormat = new Intl.NumberFormat("en-US");
+const numberFormat = new Intl.NumberFormat();
 const LEADERBOARD_TYPES = new Set(["artists", "albums", "tracks"]);
 
 const UI = {

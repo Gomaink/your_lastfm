@@ -23,7 +23,7 @@ async function fetchAndRenderStats() {
       installImageFallback(avatar);
     }
 
-    const format = number => new Intl.NumberFormat("pt-BR").format(number || 0);
+    const format = number => new Intl.NumberFormat().format(number || 0);
     updateText("profile-total-scrobbles", format(data.totalScrobbles));
     updateText("profile-artists", format(data.uniqueArtists));
     updateText("profile-albums", format(data.uniqueAlbums));
@@ -31,7 +31,7 @@ async function fetchAndRenderStats() {
 
     if (data.joinedDate) {
       const date = new Date(data.joinedDate * 1000);
-      const dateText = new Intl.DateTimeFormat("pt-BR", {
+      const dateText = new Intl.DateTimeFormat(undefined, {
         day: "numeric",
         month: "short",
         year: "numeric"

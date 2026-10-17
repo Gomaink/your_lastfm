@@ -111,8 +111,8 @@ function renderCommonItem(item, friendUsername) {
         <strong>${escapeHTML(item.name)}</strong>
         ${item.artist ? `<small>${escapeHTML(item.artist)}</small>` : ""}
         <div class="common-counts">
-          <span class="text-orange">You: ${Number(item.myPlays).toLocaleString("pt-BR")}</span>
-          <span class="text-secondary"> | ${escapeHTML(friendUsername)}: ${Number(item.friendPlays).toLocaleString("pt-BR")}</span>
+          <span class="text-orange">You: ${Number(item.myPlays).toLocaleString()}</span>
+          <span class="text-secondary"> | ${escapeHTML(friendUsername)}: ${Number(item.friendPlays).toLocaleString()}</span>
         </div>
       </div>
     </div>
@@ -121,7 +121,7 @@ function renderCommonItem(item, friendUsername) {
 
 function renderComparison(data, container) {
   const { user, friend, commonArtists, commonAlbums, commonTracks, compatibilityScore } = data;
-  const format = number => new Intl.NumberFormat("pt-BR").format(number || 0);
+  const format = number => new Intl.NumberFormat().format(number || 0);
   const compatibility = getCompatibilityStatus(compatibilityScore || 0);
   const myAvatar = safeImageUrl(
     document.querySelector(".profile-avatar img")?.src,

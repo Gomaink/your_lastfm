@@ -5,6 +5,11 @@ const state = {
   charts: {}
 };
 
+// server buckets hours by the viewer's current UTC offset; formatting in UTC prints them unchanged
+const hourFormat = new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: "UTC" });
+const formatHour = hour => hourFormat.format(Date.UTC(2000, 0, 1, hour));
+const formatHourRange = hour => `${formatHour(hour)}–${formatHour((hour + 1) % 24)}`;
+
 function replaceChart(canvasId, configuration) {
   if (state.charts[canvasId]) state.charts[canvasId].destroy();
 
@@ -69,9 +74,7 @@ export function renderListeningClock(data = {}) {
   options.plugins.tooltip = {
     callbacks: {
       title(items) {
-        const hour = Number(items[0]?.label?.slice(0, 2));
-        if (!Number.isInteger(hour)) return items[0]?.label || "";
-        return `${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00`;
+        return formatHourRange(hours[items[0].dataIndex].hour);
       },
       label(item) {
         return `${Number(item.raw || 0).toLocaleString()} plays`;
@@ -82,7 +85,7 @@ export function renderListeningClock(data = {}) {
   replaceChart("listening-clock", {
     type: "bar",
     data: {
-      labels: hours.map(item => item.label),
+      labels: hours.map(item => formatHour(item.hour)),
       datasets: [{
         data: hours.map(item => item.plays),
         backgroundColor: hours.map(item => (
@@ -100,7 +103,7 @@ export function renderListeningClock(data = {}) {
 
   peakElement.textContent = peakHour === null
     ? "No listening data for this period"
-    : `Peak: ${String(peakHour).padStart(2, "0")}:00–${String((peakHour + 1) % 24).padStart(2, "0")}:00 local time · ${Number(data.peakPlays || 0).toLocaleString()} plays`;
+    : `Peak: ${formatHourRange(peakHour)} local time · ${Number(data.peakPlays || 0).toLocaleString()} plays`;
 }
 
 export async function loadChart({ url, canvasId, labelKey, valueKey, label }) {
